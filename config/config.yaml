@@ -1,0 +1,59 @@
+# Configuration for Multi-Agent Collaboration POC
+
+# Gateway Configuration
+gateway:
+  host: "localhost"
+  port: 8000
+  fuseki_endpoint: "http://localhost:3030/ds"
+  
+# Agent Configuration
+agents:
+  ingest:
+    id: "agent_ingest"
+    api_key: "key_ingest_123"
+    permissions: ["read", "write_staging"]
+    
+  collect:
+    id: "agent_collect" 
+    api_key: "key_collect_456"
+    permissions: ["read", "write_staging"]
+    
+  reason:
+    id: "agent_reason"
+    api_key: "key_reason_789"
+    permissions: ["read", "write_staging"]
+
+# Knowledge Graph Configuration
+knowledge_graph:
+  main_graph: "http://example.org/main"
+  consensus_graph_template: "http://example.org/consensus/{session_id}"
+  staging_graph_template: "http://example.org/staging/{agent_id}"
+  quarantine_graph: "http://example.org/quarantine"
+
+# Validation Configuration
+validation:
+  shacl_shapes_file: "tourism_shacl_shapes.ttl"
+  ontology_file: "tourism_ontology.ttl"
+  max_reasoning_iterations: 10
+  reasoning_timeout_ms: 5000
+
+# Test Configuration
+testing:
+  test_data_dir: "data/test"
+  log_level: "INFO"
+  generate_reports: true
+  report_dir: "reports"
+
+# Metrics Configuration
+metrics:
+  enabled: true
+  collection_interval: 60  # seconds
+  retention_days: 7
+  
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/poc_system.log"
+  max_size: "10MB"
+  backup_count: 5

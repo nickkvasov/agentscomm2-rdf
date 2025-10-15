@@ -1,0 +1,47 @@
+# Docker Compose configuration for Multi-Agent Collaboration POC
+# Uses env.local file for environment variables
+
+services:
+  fuseki:
+    image: stain/jena-fuseki:latest
+    container_name: poc-fuseki
+    ports:
+      - "3030:3030"
+    volumes:
+      - fuseki_data:/fuseki
+      - ./data:/fuseki/data
+    environment:
+      - FUSEKI_DATASET_1=ds
+      - FUSEKI_DATASET_1_TYPE=tdb2
+      - FUSEKI_DATASET_1_ENABLED=true
+    command: ["--mem", "--update", "/ds"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3030/$/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  gateway:
+    build: .
+    container_name: poc-gateway
+    ports:
+      - "8000:8000"
+    depends_on:
+      - fuseki
+    env_file:
+      - env.local
+    environment:
+      - FUSEKI_ENDPOINT=http://fuseki:3030/ds
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    volumes:
+      - ./src:/app/src
+      - ./config:/app/config
+      - ./data:/app/data
+    command: ["python", "src/gateway/main.py"]
+    restart: unless-stopped
+
+volumes:
+  fuseki_data:
+    driver: local
