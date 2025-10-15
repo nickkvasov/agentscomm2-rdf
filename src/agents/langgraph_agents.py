@@ -39,24 +39,32 @@ class AgentState(TypedDict):
 class TourismLangGraphAgents:
     """LangGraph-based multi-agent system for tourism domain."""
     
-    def __init__(self, llm_provider: str = "openai", api_key: str = None):
+    def __init__(self, llm_provider: str = "openai", api_key: str = None, gateway = None):
         """
         Initialize LangGraph agents.
         
         Args:
             llm_provider: LLM provider ("openai" or "anthropic")
             api_key: API key for LLM provider
+            gateway: ValidatorGateway instance (optional)
         """
         self.llm_provider = llm_provider
+        self.gateway = gateway
         self.api_key = api_key
         
         # Initialize LLM
         self.llm = self._setup_llm()
         
-        # Initialize ontology components
-        self.ontology = TourismOntology()
-        self.shacl_shapes = TourismSHACLShapes()
-        self.reasoning_engine = TourismReasoningEngine()
+        # Initialize ontology components with gateway if available
+        if gateway:
+            self.ontology = gateway.ontology
+            self.shacl_shapes = gateway.shacl_shapes
+            self.reasoning_engine = gateway.reasoning_engine
+        else:
+            # Fallback to direct initialization (will fail without FusekiClient)
+            self.ontology = TourismOntology()
+            self.shacl_shapes = TourismSHACLShapes()
+            self.reasoning_engine = TourismReasoningEngine()
         
         # Agent configurations
         self.agents = {
@@ -429,9 +437,9 @@ class TourismLangGraphAgents:
         return asyncio.run(self.run_collaboration(initial_data, session_id))
 
 
-def create_langgraph_agents(llm_provider: str = "openai", api_key: str = None) -> TourismLangGraphAgents:
+def create_langgraph_agents(llm_provider: str = "openai", api_key: str = None, gateway = None) -> TourismLangGraphAgents:
     """Create LangGraph-based tourism agents."""
-    return TourismLangGraphAgents(llm_provider, api_key)
+    return TourismLangGraphAgents(llm_provider, api_key, gateway)
 
 
 if __name__ == "__main__":

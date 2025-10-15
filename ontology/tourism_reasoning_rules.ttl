@@ -1,0 +1,356 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix swrl: <http://www.w3.org/2003/11/swrl#> .
+@prefix swrlb: <http://www.w3.org/2003/11/swrlb#> .
+@prefix tourism: <http://example.org/tourism#> .
+@prefix rules: <http://example.org/rules#> .
+
+# Forward-Chaining Reasoning Rules for Tourism Domain
+# SWRL rules for materializing higher-level concepts and detecting contradictions
+
+# Rule 1: Coastal Attraction Rule
+# Attraction in CoastalCity => CoastalAttraction
+rules:CoastalAttractionRule rdf:type swrl:Imp ;
+    swrl:body [
+        rdf:type swrl:AtomList ;
+        swrl:first [
+            rdf:type swrl:IndividualAtom ;
+            swrl:argument1 tourism:attraction ;
+            swrl:argument2 tourism:Attraction
+        ] ;
+        swrl:rest [
+            rdf:type swrl:AtomList ;
+            swrl:first [
+                rdf:type swrl:IndividualAtom ;
+                swrl:argument1 tourism:city ;
+                swrl:argument2 tourism:CoastalCity
+            ] ;
+            swrl:rest [
+                rdf:type swrl:AtomList ;
+                swrl:first [
+                    rdf:type swrl:ObjectPropertyAtom ;
+                    swrl:argument1 tourism:attraction ;
+                    swrl:argument2 tourism:city ;
+                    swrl:argument3 tourism:locatedIn
+                ] ;
+                swrl:rest rdf:nil
+            ]
+        ]
+    ] ;
+    swrl:head [
+        rdf:type swrl:AtomList ;
+        swrl:first [
+            rdf:type swrl:IndividualAtom ;
+            swrl:argument1 tourism:attraction ;
+            swrl:argument2 tourism:CoastalAttraction
+        ] ;
+        swrl:rest rdf:nil
+    ] .
+
+# Rule 2: Family Friendly Playground Rule
+# Attraction with Playground amenity => FamilyFriendlyAttraction
+rules:FamilyFriendlyPlaygroundRule rdf:type swrl:Imp ;
+    swrl:body [
+        rdf:type swrl:AtomList ;
+        swrl:first [
+            rdf:type swrl:IndividualAtom ;
+            swrl:argument1 tourism:attraction ;
+            swrl:argument2 tourism:Attraction
+        ] ;
+        swrl:rest [
+            rdf:type swrl:AtomList ;
+            swrl:first [
+                rdf:type swrl:DatavaluedPropertyAtom ;
+                swrl:argument1 tourism:attraction ;
+                swrl:argument2 tourism:amenity ;
+                swrl:argument3 tourism:hasAmenity
+            ] ;
+            swrl:rest [
+                rdf:type swrl:AtomList ;
+                swrl:first [
+                    rdf:type swrl:BuiltinAtom ;
+                    swrl:argument1 tourism:amenity ;
+                    swrl:argument2 "Playground" ;
+                    swrl:argument3 swrlb:equal
+                ] ;
+                swrl:rest rdf:nil
+            ]
+        ]
+    ] ;
+    swrl:head [
+        rdf:type swrl:AtomList ;
+        swrl:first [
+            rdf:type swrl:IndividualAtom ;
+            swrl:argument1 tourism:attraction ;
+            swrl:argument2 tourism:FamilyFriendlyAttraction
+        ] ;
+        swrl:rest rdf:nil
+    ] .
+
+# Rule 3: Not Family Friendly Age Rule
+# Attraction with MinAge > 12 => NotFamilyFriendlyAttraction
+rules:NotFamilyFriendlyAgeRule rdf:type swrl:Imp ;
+    swrl:body [
+        rdf:type swrl:AtomList ;
+        swrl:first [
+            rdf:type swrl:IndividualAtom ;
+            swrl:argument1 tourism:attraction ;
+            swrl:argument2 tourism:Attraction
+        ] ;
+        swrl:rest [
+            rdf:type swrl:AtomList ;
+            swrl:first [
+                rdf:type swrl:DatavaluedPropertyAtom ;
+                swrl:argument1 tourism:attraction ;
+                swrl:argument2 tourism:minAge ;
+                swrl:argument3 tourism:hasMinAge
+            ] ;
+            swrl:rest [
+                rdf:type swrl:AtomList ;
+                swrl:first [
+                    rdf:type swrl:BuiltinAtom ;
+                    swrl:argument1 tourism:minAge ;
+                    swrl:argument2 12 ;
+                    swrl:argument3 swrlb:greaterThan
+                ] ;
+                swrl:rest rdf:nil
+            ]
+        ]
+    ] ;
+    swrl:head [
+        rdf:type swrl:AtomList ;
+        swrl:first [
+            rdf:type swrl:IndividualAtom ;
+            swrl:argument1 tourism:attraction ;
+            swrl:argument2 tourism:NotFamilyFriendlyAttraction
+        ] ;
+        swrl:rest rdf:nil
+    ] .
+
+# Rule 4: Coastal Family Destination Rule
+# CoastalCity + FamilyFriendlyAttraction + Rating >= 4.5 => CoastalFamilyDestination
+rules:CoastalFamilyDestinationRule rdf:type swrl:Imp ;
+    swrl:body [
+        rdf:type swrl:AtomList ;
+        swrl:first [
+            rdf:type swrl:IndividualAtom ;
+            swrl:argument1 tourism:city ;
+            swrl:argument2 tourism:CoastalCity
+        ] ;
+        swrl:rest [
+            rdf:type swrl:AtomList ;
+            swrl:first [
+                rdf:type swrl:IndividualAtom ;
+                swrl:argument1 tourism:attraction ;
+                swrl:argument2 tourism:FamilyFriendlyAttraction
+            ] ;
+            swrl:rest [
+                rdf:type swrl:AtomList ;
+                swrl:first [
+                    rdf:type swrl:ObjectPropertyAtom ;
+                    swrl:argument1 tourism:attraction ;
+                    swrl:argument2 tourism:city ;
+                    swrl:argument3 tourism:locatedIn
+                ] ;
+                swrl:rest [
+                    rdf:type swrl:AtomList ;
+                    swrl:first [
+                        rdf:type swrl:DatavaluedPropertyAtom ;
+                        swrl:argument1 tourism:attraction ;
+                        swrl:argument2 tourism:rating ;
+                        swrl:argument3 tourism:hasRating
+                    ] ;
+                    swrl:rest [
+                        rdf:type swrl:AtomList ;
+                        swrl:first [
+                            rdf:type swrl:BuiltinAtom ;
+                            swrl:argument1 tourism:rating ;
+                            swrl:argument2 4.5 ;
+                            swrl:argument3 swrlb:greaterThanOrEqual
+                        ] ;
+                        swrl:rest rdf:nil
+                    ]
+                ]
+            ]
+        ]
+    ] ;
+    swrl:head [
+        rdf:type swrl:AtomList ;
+        swrl:first [
+            rdf:type swrl:IndividualAtom ;
+            swrl:argument1 tourism:destination ;
+            swrl:argument2 tourism:CoastalFamilyDestination
+        ] ;
+        swrl:rest [
+            rdf:type swrl:AtomList ;
+            swrl:first [
+                rdf:type swrl:ObjectPropertyAtom ;
+                swrl:argument1 tourism:destination ;
+                swrl:argument2 tourism:city ;
+                swrl:argument3 tourism:hasCity
+            ] ;
+            swrl:rest [
+                rdf:type swrl:AtomList ;
+                swrl:first [
+                    rdf:type swrl:ObjectPropertyAtom ;
+                    swrl:argument1 tourism:destination ;
+                    swrl:argument2 tourism:attraction ;
+                    swrl:argument3 tourism:hasPrimaryAttraction
+                ] ;
+                swrl:rest rdf:nil
+            ]
+        ]
+    ] .
+
+# Rule 5: Contradiction Detection Rule
+# FamilyFriendlyAttraction AND NotFamilyFriendlyAttraction => Contradiction
+rules:ContradictionDetectionRule rdf:type swrl:Imp ;
+    swrl:body [
+        rdf:type swrl:AtomList ;
+        swrl:first [
+            rdf:type swrl:IndividualAtom ;
+            swrl:argument1 tourism:entity ;
+            swrl:argument2 tourism:FamilyFriendlyAttraction
+        ] ;
+        swrl:rest [
+            rdf:type swrl:AtomList ;
+            swrl:first [
+                rdf:type swrl:IndividualAtom ;
+                swrl:argument1 tourism:entity ;
+                swrl:argument2 tourism:NotFamilyFriendlyAttraction
+            ] ;
+            swrl:rest rdf:nil
+        ]
+    ] ;
+    swrl:head [
+        rdf:type swrl:AtomList ;
+        swrl:first [
+            rdf:type swrl:IndividualAtom ;
+            swrl:argument1 tourism:entity ;
+            swrl:argument2 tourism:Contradiction
+        ] ;
+        swrl:rest rdf:nil
+    ] .
+
+# Additional SPARQL-based reasoning rules for complex queries
+
+# SPARQL Rule 1: Find all coastal attractions
+rules:FindCoastalAttractions rdf:type rules:SPARQLRule ;
+    rules:query """
+        SELECT ?attraction ?city
+        WHERE {
+            ?attraction tourism:locatedIn ?city .
+            ?city rdf:type tourism:CoastalCity .
+            ?attraction rdf:type tourism:Attraction .
+            FILTER NOT EXISTS { ?attraction rdf:type tourism:CoastalAttraction }
+        }
+    """ ;
+    rules:action """
+        INSERT { ?attraction rdf:type tourism:CoastalAttraction }
+        WHERE {
+            ?attraction tourism:locatedIn ?city .
+            ?city rdf:type tourism:CoastalCity .
+            ?attraction rdf:type tourism:Attraction .
+            FILTER NOT EXISTS { ?attraction rdf:type tourism:CoastalAttraction }
+        }
+    """ .
+
+# SPARQL Rule 2: Find family-friendly attractions with playground
+rules:FindFamilyFriendlyPlayground rdf:type rules:SPARQLRule ;
+    rules:query """
+        SELECT ?attraction
+        WHERE {
+            ?attraction rdf:type tourism:Attraction .
+            ?attraction tourism:hasAmenity "Playground" .
+            FILTER NOT EXISTS { ?attraction rdf:type tourism:FamilyFriendlyAttraction }
+        }
+    """ ;
+    rules:action """
+        INSERT { ?attraction rdf:type tourism:FamilyFriendlyAttraction }
+        WHERE {
+            ?attraction rdf:type tourism:Attraction .
+            ?attraction tourism:hasAmenity "Playground" .
+            FILTER NOT EXISTS { ?attraction rdf:type tourism:FamilyFriendlyAttraction }
+        }
+    """ .
+
+# SPARQL Rule 3: Find not family-friendly attractions with age restriction
+rules:FindNotFamilyFriendlyAge rdf:type rules:SPARQLRule ;
+    rules:query """
+        SELECT ?attraction ?minAge
+        WHERE {
+            ?attraction rdf:type tourism:Attraction .
+            ?attraction tourism:hasMinAge ?minAge .
+            FILTER(?minAge > 12)
+            FILTER NOT EXISTS { ?attraction rdf:type tourism:NotFamilyFriendlyAttraction }
+        }
+    """ ;
+    rules:action """
+        INSERT { ?attraction rdf:type tourism:NotFamilyFriendlyAttraction }
+        WHERE {
+            ?attraction rdf:type tourism:Attraction .
+            ?attraction tourism:hasMinAge ?minAge .
+            FILTER(?minAge > 12)
+            FILTER NOT EXISTS { ?attraction rdf:type tourism:NotFamilyFriendlyAttraction }
+        }
+    """ .
+
+# SPARQL Rule 4: Create coastal family destinations
+rules:CreateCoastalFamilyDestinations rdf:type rules:SPARQLRule ;
+    rules:query """
+        SELECT ?city ?attraction ?rating
+        WHERE {
+            ?city rdf:type tourism:CoastalCity .
+            ?attraction rdf:type tourism:FamilyFriendlyAttraction .
+            ?attraction tourism:locatedIn ?city .
+            ?attraction tourism:hasRating ?rating .
+            FILTER(?rating >= 4.5)
+            FILTER NOT EXISTS {
+                ?destination rdf:type tourism:CoastalFamilyDestination .
+                ?destination tourism:hasCity ?city .
+                ?destination tourism:hasPrimaryAttraction ?attraction .
+            }
+        }
+    """ ;
+    rules:action """
+        INSERT {
+            ?destination rdf:type tourism:CoastalFamilyDestination .
+            ?destination tourism:hasCity ?city .
+            ?destination tourism:hasPrimaryAttraction ?attraction .
+            ?destination tourism:hasRating ?rating .
+        }
+        WHERE {
+            ?city rdf:type tourism:CoastalCity .
+            ?attraction rdf:type tourism:FamilyFriendlyAttraction .
+            ?attraction tourism:locatedIn ?city .
+            ?attraction tourism:hasRating ?rating .
+            FILTER(?rating >= 4.5)
+            FILTER NOT EXISTS {
+                ?existing rdf:type tourism:CoastalFamilyDestination .
+                ?existing tourism:hasCity ?city .
+                ?existing tourism:hasPrimaryAttraction ?attraction .
+            }
+            BIND(IRI(CONCAT("http://example.org/tourism#CoastalFamilyDestination_", 
+                           STRAFTER(STR(?city), "#"), "_", 
+                           STRAFTER(STR(?attraction), "#"))) AS ?destination)
+        }
+    """ .
+
+# SPARQL Rule 5: Detect contradictions
+rules:DetectContradictions rdf:type rules:SPARQLRule ;
+    rules:query """
+        SELECT ?entity
+        WHERE {
+            ?entity rdf:type tourism:FamilyFriendlyAttraction .
+            ?entity rdf:type tourism:NotFamilyFriendlyAttraction .
+        }
+    """ ;
+    rules:action """
+        INSERT { ?entity rdf:type tourism:Contradiction }
+        WHERE {
+            ?entity rdf:type tourism:FamilyFriendlyAttraction .
+            ?entity rdf:type tourism:NotFamilyFriendlyAttraction .
+        }
+    """ .

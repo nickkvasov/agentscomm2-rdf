@@ -1,16 +1,14 @@
 """
-Tourism Domain Ontology for Multi-Agent Collaboration POC
+Tourism Domain Ontology Loader
 
-This module defines the RDF ontology for the tourism domain including:
-- Core classes: City, CoastalCity, Country, Attraction, etc.
-- Properties: locatedIn, inCountry, hasAmenity, hasRating, etc.
-- Composite concepts: CoastalFamilyDestination
-- Message vocabulary for inter-agent communication
+This module loads the tourism domain ontology from standard RDF/OWL format files
+instead of defining everything in Python code.
 """
 
 from rdflib import Graph, Namespace, Literal, URIRef
 from rdflib.namespace import RDF, RDFS, OWL, XSD
 from typing import Dict, List, Optional
+import os
 
 # Define namespaces
 TOURISM = Namespace("http://example.org/tourism#")
@@ -18,16 +16,31 @@ MSG = Namespace("http://example.org/messages#")
 SHACL = Namespace("http://www.w3.org/ns/shacl#")
 
 class TourismOntology:
-    """Tourism domain ontology with classes, properties, and constraints."""
+    """Tourism domain ontology loader from standard RDF/OWL files."""
     
-    def __init__(self):
+    def __init__(self, fuseki_client=None, ontology_file: str = None):
+        """
+        Initialize the ontology by loading from Fuseki.
+        
+        Args:
+            fuseki_client: FusekiClient instance (required)
+            ontology_file: Path to the ontology file (defaults to ontology/tourism_ontology.ttl)
+        """
+        if fuseki_client is None:
+            raise ValueError("FusekiClient is required - local processing is not supported")
+        
+        self.fuseki_client = fuseki_client
         self.graph = Graph()
         self._setup_namespaces()
-        self._define_classes()
-        self._define_properties()
-        self._define_constraints()
-        self._define_composite_concepts()
-        self._define_message_vocabulary()
+        
+        # Load ontology from file
+        if ontology_file is None:
+            # Default to the ontology directory
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(os.path.dirname(current_dir))
+            ontology_file = os.path.join(project_root, "ontology", "tourism_ontology.ttl")
+        
+        self._load_ontology(ontology_file)
     
     def _setup_namespaces(self):
         """Bind namespaces to the graph."""
@@ -37,123 +50,37 @@ class TourismOntology:
         self.graph.bind("owl", OWL)
         self.graph.bind("rdfs", RDFS)
     
-    def _define_classes(self):
-        """Define core classes and their hierarchy."""
-        # Core classes
+    def _load_ontology(self, ontology_file: str):
+        """Load the ontology from Fuseki."""
+        try:
+            # Load ontology into Fuseki first
+            if not self.fuseki_client.load_ontology(ontology_file):
+                raise RuntimeError(f"Failed to load ontology into Fuseki: {ontology_file}")
+            
+            # Get ontology data from Fuseki
+            self.graph = self.fuseki_client.get_graph_data(self.fuseki_client.main_graph)
+            print(f"✅ Loaded tourism ontology from Fuseki (source: {ontology_file})")
+        except Exception as e:
+            print(f"❌ Error loading ontology from Fuseki: {e}")
+            raise RuntimeError(f"Failed to load ontology - Fuseki is required: {e}")
+    
+    def _create_fallback_ontology(self):
+        """Create a minimal fallback ontology if file loading fails."""
+        print("Creating fallback ontology...")
+        
+        # Basic classes
         self.graph.add((TOURISM.City, RDF.type, OWL.Class))
         self.graph.add((TOURISM.Country, RDF.type, OWL.Class))
         self.graph.add((TOURISM.Attraction, RDF.type, OWL.Class))
         
-        # Specialized classes
-        self.graph.add((TOURISM.CoastalCity, RDF.type, OWL.Class))
-        self.graph.add((TOURISM.CoastalCity, RDFS.subClassOf, TOURISM.City))
-        
-        self.graph.add((TOURISM.CoastalAttraction, RDF.type, OWL.Class))
-        self.graph.add((TOURISM.CoastalAttraction, RDFS.subClassOf, TOURISM.Attraction))
-        
-        self.graph.add((TOURISM.FamilyFriendlyAttraction, RDF.type, OWL.Class))
-        self.graph.add((TOURISM.FamilyFriendlyAttraction, RDFS.subClassOf, TOURISM.Attraction))
-        
-        self.graph.add((TOURISM.NotFamilyFriendlyAttraction, RDF.type, OWL.Class))
-        self.graph.add((TOURISM.NotFamilyFriendlyAttraction, RDFS.subClassOf, TOURISM.Attraction))
-        
-        # Disjoint classes
-        self.graph.add((TOURISM.FamilyFriendlyAttraction, OWL.disjointWith, TOURISM.NotFamilyFriendlyAttraction))
-        
-        # Composite concept
-        self.graph.add((TOURISM.CoastalFamilyDestination, RDF.type, OWL.Class))
-    
-    def _define_properties(self):
-        """Define object and data properties."""
-        # Object properties
+        # Basic properties
         self.graph.add((TOURISM.locatedIn, RDF.type, OWL.ObjectProperty))
         self.graph.add((TOURISM.locatedIn, RDFS.domain, TOURISM.Attraction))
         self.graph.add((TOURISM.locatedIn, RDFS.range, TOURISM.City))
         
-        self.graph.add((TOURISM.inCountry, RDF.type, OWL.ObjectProperty))
-        self.graph.add((TOURISM.inCountry, RDFS.domain, TOURISM.City))
-        self.graph.add((TOURISM.inCountry, RDFS.range, TOURISM.Country))
-        
-        self.graph.add((TOURISM.hasPrimaryAttraction, RDF.type, OWL.ObjectProperty))
-        self.graph.add((TOURISM.hasPrimaryAttraction, RDFS.domain, TOURISM.CoastalFamilyDestination))
-        self.graph.add((TOURISM.hasPrimaryAttraction, RDFS.range, TOURISM.Attraction))
-        
-        self.graph.add((TOURISM.hasCity, RDF.type, OWL.ObjectProperty))
-        self.graph.add((TOURISM.hasCity, RDFS.domain, TOURISM.CoastalFamilyDestination))
-        self.graph.add((TOURISM.hasCity, RDFS.range, TOURISM.City))
-        
-        # Data properties
-        self.graph.add((TOURISM.hasAmenity, RDF.type, OWL.DatatypeProperty))
-        self.graph.add((TOURISM.hasAmenity, RDFS.domain, TOURISM.Attraction))
-        self.graph.add((TOURISM.hasAmenity, RDFS.range, XSD.string))
-        
-        self.graph.add((TOURISM.hasRating, RDF.type, OWL.DatatypeProperty))
-        self.graph.add((TOURISM.hasRating, RDFS.domain, TOURISM.Attraction))
-        self.graph.add((TOURISM.hasRating, RDFS.range, XSD.decimal))
-        
-        self.graph.add((TOURISM.hasEntryFeeAmount, RDF.type, OWL.DatatypeProperty))
-        self.graph.add((TOURISM.hasEntryFeeAmount, RDFS.domain, TOURISM.Attraction))
-        self.graph.add((TOURISM.hasEntryFeeAmount, RDFS.range, XSD.decimal))
-        
-        self.graph.add((TOURISM.hasEntryFeeCurrency, RDF.type, OWL.DatatypeProperty))
-        self.graph.add((TOURISM.hasEntryFeeCurrency, RDFS.domain, TOURISM.Attraction))
-        self.graph.add((TOURISM.hasEntryFeeCurrency, RDFS.range, XSD.string))
-        
-        self.graph.add((TOURISM.hasMinAge, RDF.type, OWL.DatatypeProperty))
-        self.graph.add((TOURISM.hasMinAge, RDFS.domain, TOURISM.Attraction))
-        self.graph.add((TOURISM.hasMinAge, RDFS.range, XSD.integer))
-        
-        self.graph.add((TOURISM.isCoastal, RDF.type, OWL.DatatypeProperty))
-        self.graph.add((TOURISM.isCoastal, RDFS.domain, TOURISM.City))
-        self.graph.add((TOURISM.isCoastal, RDFS.range, XSD.boolean))
-        
         self.graph.add((TOURISM.hasName, RDF.type, OWL.DatatypeProperty))
         self.graph.add((TOURISM.hasName, RDFS.domain, TOURISM.City))
         self.graph.add((TOURISM.hasName, RDFS.range, XSD.string))
-        
-        self.graph.add((TOURISM.hasName, RDFS.domain, TOURISM.Attraction))
-        self.graph.add((TOURISM.hasName, RDFS.domain, TOURISM.Country))
-    
-    def _define_constraints(self):
-        """Define functional properties and constraints."""
-        # Functional properties
-        self.graph.add((TOURISM.locatedIn, RDF.type, OWL.FunctionalProperty))
-        self.graph.add((TOURISM.inCountry, RDF.type, OWL.FunctionalProperty))
-        
-        # Rating constraints (0-5)
-        self.graph.add((TOURISM.hasRating, RDFS.range, XSD.decimal))
-        
-        # Currency constraints
-        self.graph.add((TOURISM.hasEntryFeeCurrency, RDFS.range, XSD.string))
-    
-    def _define_composite_concepts(self):
-        """Define composite concepts and their relationships."""
-        # CoastalFamilyDestination requires both coastal city and family-friendly attraction
-        self.graph.add((TOURISM.CoastalFamilyDestination, RDFS.comment, 
-                       Literal("A destination that combines a coastal city with a family-friendly attraction")))
-    
-    def _define_message_vocabulary(self):
-        """Define vocabulary for inter-agent messages."""
-        # Message types
-        self.graph.add((MSG.Intent, RDF.type, OWL.Class))
-        self.graph.add((MSG.Intent, RDFS.comment, Literal("Represents an agent's intent or action")))
-        
-        # Message properties
-        self.graph.add((MSG.about, RDF.type, OWL.ObjectProperty))
-        self.graph.add((MSG.about, RDFS.domain, MSG.Intent))
-        self.graph.add((MSG.about, RDFS.range, OWL.Thing))
-        
-        self.graph.add((MSG.payloadGraph, RDF.type, OWL.ObjectProperty))
-        self.graph.add((MSG.payloadGraph, RDFS.domain, MSG.Intent))
-        self.graph.add((MSG.payloadGraph, RDFS.range, OWL.Thing))
-        
-        self.graph.add((MSG.fromAgent, RDF.type, OWL.DatatypeProperty))
-        self.graph.add((MSG.fromAgent, RDFS.domain, MSG.Intent))
-        self.graph.add((MSG.fromAgent, RDFS.range, XSD.string))
-        
-        self.graph.add((MSG.timestamp, RDF.type, OWL.DatatypeProperty))
-        self.graph.add((MSG.timestamp, RDFS.domain, MSG.Intent))
-        self.graph.add((MSG.timestamp, RDFS.range, XSD.dateTime))
     
     def get_ontology_graph(self) -> Graph:
         """Return the complete ontology graph."""
@@ -225,8 +152,8 @@ def create_sample_data() -> Graph:
 if __name__ == "__main__":
     # Create and save the ontology
     ontology = TourismOntology()
-    ontology.save_to_file("tourism_ontology.ttl")
-    print("Tourism ontology created and saved to tourism_ontology.ttl")
+    ontology.save_to_file("tourism_ontology_loaded.ttl")
+    print("Tourism ontology loaded and saved to tourism_ontology_loaded.ttl")
     
     # Create sample data
     sample_data = create_sample_data()

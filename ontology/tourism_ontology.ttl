@@ -1,0 +1,149 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix tourism: <http://example.org/tourism#> .
+@prefix msg: <http://example.org/messages#> .
+
+# Tourism Domain Ontology
+# A comprehensive ontology for tourism domain with classes, properties, and constraints
+
+# Core Classes
+tourism:City rdf:type owl:Class ;
+    rdfs:comment "A city in the tourism domain" .
+
+tourism:Country rdf:type owl:Class ;
+    rdfs:comment "A country in the tourism domain" .
+
+tourism:Attraction rdf:type owl:Class ;
+    rdfs:comment "A tourist attraction" .
+
+# Specialized Classes
+tourism:CoastalCity rdf:type owl:Class ;
+    rdfs:subClassOf tourism:City ;
+    rdfs:comment "A city that is located on the coast" .
+
+tourism:CoastalAttraction rdf:type owl:Class ;
+    rdfs:subClassOf tourism:Attraction ;
+    rdfs:comment "An attraction located in a coastal city" .
+
+tourism:FamilyFriendlyAttraction rdf:type owl:Class ;
+    rdfs:subClassOf tourism:Attraction ;
+    rdfs:comment "An attraction suitable for families" .
+
+tourism:NotFamilyFriendlyAttraction rdf:type owl:Class ;
+    rdfs:subClassOf tourism:Attraction ;
+    rdfs:comment "An attraction not suitable for families" .
+
+# Disjoint classes
+tourism:FamilyFriendlyAttraction owl:disjointWith tourism:NotFamilyFriendlyAttraction .
+
+# Composite concept
+tourism:CoastalFamilyDestination rdf:type owl:Class ;
+    rdfs:comment "A destination that combines a coastal city with a family-friendly attraction" .
+
+# Object Properties
+tourism:locatedIn rdf:type owl:ObjectProperty ;
+    rdfs:domain tourism:Attraction ;
+    rdfs:range tourism:City ;
+    rdf:type owl:FunctionalProperty ;
+    rdfs:comment "Indicates which city an attraction is located in" .
+
+tourism:inCountry rdf:type owl:ObjectProperty ;
+    rdfs:domain tourism:City ;
+    rdfs:range tourism:Country ;
+    rdf:type owl:FunctionalProperty ;
+    rdfs:comment "Indicates which country a city is in" .
+
+tourism:hasPrimaryAttraction rdf:type owl:ObjectProperty ;
+    rdfs:domain tourism:CoastalFamilyDestination ;
+    rdfs:range tourism:Attraction ;
+    rdfs:comment "The primary attraction of a coastal family destination" .
+
+tourism:hasCity rdf:type owl:ObjectProperty ;
+    rdfs:domain tourism:CoastalFamilyDestination ;
+    rdfs:range tourism:City ;
+    rdfs:comment "The city of a coastal family destination" .
+
+# Data Properties
+tourism:hasAmenity rdf:type owl:DatatypeProperty ;
+    rdfs:domain tourism:Attraction ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Amenities available at an attraction" .
+
+tourism:hasRating rdf:type owl:DatatypeProperty ;
+    rdfs:domain tourism:Attraction ;
+    rdfs:range xsd:decimal ;
+    rdfs:comment "Rating of an attraction (0-5 scale)" .
+
+tourism:hasEntryFeeAmount rdf:type owl:DatatypeProperty ;
+    rdfs:domain tourism:Attraction ;
+    rdfs:range xsd:decimal ;
+    rdfs:comment "Entry fee amount for an attraction" .
+
+tourism:hasEntryFeeCurrency rdf:type owl:DatatypeProperty ;
+    rdfs:domain tourism:Attraction ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Currency for the entry fee" .
+
+tourism:hasMinAge rdf:type owl:DatatypeProperty ;
+    rdfs:domain tourism:Attraction ;
+    rdfs:range xsd:integer ;
+    rdfs:comment "Minimum age requirement for an attraction" .
+
+tourism:isCoastal rdf:type owl:DatatypeProperty ;
+    rdfs:domain tourism:City ;
+    rdfs:range xsd:boolean ;
+    rdfs:comment "Whether a city is coastal" .
+
+tourism:hasName rdf:type owl:DatatypeProperty ;
+    rdfs:domain tourism:City ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Name of a city" .
+
+tourism:hasName rdfs:domain tourism:Attraction ;
+    rdfs:comment "Name of an attraction" .
+
+tourism:hasName rdfs:domain tourism:Country ;
+    rdfs:comment "Name of a country" .
+
+# Message Vocabulary for Inter-Agent Communication
+msg:Intent rdf:type owl:Class ;
+    rdfs:comment "Represents an agent's intent or action" .
+
+msg:about rdf:type owl:ObjectProperty ;
+    rdfs:domain msg:Intent ;
+    rdfs:range owl:Thing ;
+    rdfs:comment "What the intent is about" .
+
+msg:payloadGraph rdf:type owl:ObjectProperty ;
+    rdfs:domain msg:Intent ;
+    rdfs:range owl:Thing ;
+    rdfs:comment "The payload graph of the intent" .
+
+msg:fromAgent rdf:type owl:DatatypeProperty ;
+    rdfs:domain msg:Intent ;
+    rdfs:range xsd:string ;
+    rdfs:comment "The agent that created the intent" .
+
+msg:timestamp rdf:type owl:DatatypeProperty ;
+    rdfs:domain msg:Intent ;
+    rdfs:range xsd:dateTime ;
+    rdfs:comment "Timestamp of the intent" .
+
+# Sample Data
+tourism:Dubai rdf:type tourism:CoastalCity ;
+    tourism:hasName "Dubai" ;
+    tourism:isCoastal true ;
+    tourism:inCountry tourism:UAE .
+
+tourism:UAE rdf:type tourism:Country ;
+    tourism:hasName "United Arab Emirates" .
+
+tourism:DubaiAquarium rdf:type tourism:Attraction ;
+    tourism:hasName "Dubai Aquarium" ;
+    tourism:locatedIn tourism:Dubai ;
+    tourism:hasAmenity "Playground" ;
+    tourism:hasRating 4.6 ;
+    tourism:hasEntryFeeAmount 25.0 ;
+    tourism:hasEntryFeeCurrency "AED" .

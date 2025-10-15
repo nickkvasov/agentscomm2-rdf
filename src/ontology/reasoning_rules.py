@@ -1,14 +1,15 @@
 """
-Forward-Chaining Reasoning Rules for Tourism Domain
+Forward-Chaining Reasoning Rules Loader for Tourism Domain
 
-This module implements the reasoning rules for materializing higher-level concepts
-and detecting contradictions in the tourism domain according to the POC requirements.
+This module loads reasoning rules from standard format files (SWRL/SPARQL)
+instead of defining everything in Python code.
 """
 
 from rdflib import Graph, Namespace, Literal, URIRef, BNode
 from rdflib.namespace import RDF, RDFS, OWL, XSD
 from typing import List, Dict, Any, Set, Tuple, Optional
 import logging
+import os
 
 # Define namespaces
 TOURISM = Namespace("http://example.org/tourism#")
@@ -18,23 +19,121 @@ RULES = Namespace("http://example.org/rules#")
 logger = logging.getLogger(__name__)
 
 class TourismReasoningEngine:
-    """Forward-chaining reasoning engine for tourism domain."""
+    """Forward-chaining reasoning engine that loads rules from standard format files."""
     
-    def __init__(self):
+    def __init__(self, fuseki_client=None, rules_file: str = None):
+        """
+        Initialize the reasoning engine by loading rules from Fuseki.
+        
+        Args:
+            fuseki_client: FusekiClient instance (required)
+            rules_file: Path to the rules file (defaults to ontology/tourism_reasoning_rules.ttl)
+        """
+        if fuseki_client is None:
+            raise ValueError("FusekiClient is required - local processing is not supported")
+        
+        self.fuseki_client = fuseki_client
         self.rules = []
-        self._define_rules()
         self.derived_facts = set()
         self.contradictions = []
+        
+        # Load rules from file
+        if rules_file is None:
+            # Default to the ontology directory
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(os.path.dirname(current_dir))
+            rules_file = os.path.join(project_root, "ontology", "tourism_reasoning_rules.ttl")
+        
+        self._load_rules(rules_file)
+        self._define_python_rules()
     
-    def _define_rules(self):
-        """Define forward-chaining reasoning rules."""
-        self.rules = [
+    def _load_rules(self, rules_file: str):
+        """Load reasoning rules from Fuseki."""
+        try:
+            # Load rules into Fuseki first
+            if not self.fuseki_client.load_reasoning_rules(rules_file):
+                raise RuntimeError(f"Failed to load reasoning rules into Fuseki: {rules_file}")
+            
+            # Get rules data from Fuseki
+            rules_graph = self.fuseki_client.get_graph_data(self.fuseki_client.main_graph)
+            print(f"✅ Loaded reasoning rules from Fuseki (source: {rules_file})")
+            
+            # Extract SPARQL rules from the loaded graph
+            self._extract_sparql_rules(rules_graph)
+            
+        except Exception as e:
+            print(f"❌ Error loading reasoning rules from {rules_file}: {e}")
+            print("Using fallback Python rules...")
+    
+    def _extract_sparql_rules(self, rules_graph: Graph):
+        """Extract SPARQL rules from the loaded rules graph."""
+        # Query for SPARQL rules
+        query = """
+        SELECT ?rule ?query ?action
+        WHERE {
+            ?rule rdf:type rules:SPARQLRule .
+            ?rule rules:query ?query .
+            ?rule rules:action ?action .
+        }
+        """
+        
+        for row in rules_graph.query(query):
+            rule_name = str(row.rule).split('#')[-1]
+            query_text = str(row.query)
+            action_text = str(row.action)
+            
+            # Create a rule function
+            def create_rule_func(query, action, name):
+                def rule_func(graph):
+                    return self._execute_sparql_rule(graph, query, action, name)
+                return rule_func
+            
+            rule_func = create_rule_func(query_text, action_text, rule_name)
+            rule_func.__name__ = rule_name
+            self.rules.append(rule_func)
+            logger.info(f"Loaded SPARQL rule: {rule_name}")
+    
+    def _execute_sparql_rule(self, graph: Graph, query: str, action: str, rule_name: str) -> List[Tuple]:
+        """Execute a SPARQL rule and return new facts."""
+        try:
+            # Execute the query to find matching patterns
+            results = list(graph.query(query))
+            
+            if not results:
+                return []
+            
+            # Execute the action to generate new facts
+            action_results = list(graph.query(action))
+            
+            new_facts = []
+            for result in action_results:
+                # Convert SPARQL result to RDF triple
+                if len(result) >= 3:
+                    subject, predicate, object = result[0], result[1], result[2]
+                    new_facts.append((subject, predicate, object))
+                    logger.info(f"Derived by {rule_name}: {subject} {predicate} {object}")
+            
+            return new_facts
+            
+        except Exception as e:
+            logger.error(f"Error executing SPARQL rule {rule_name}: {e}")
+            return []
+    
+    def _define_python_rules(self):
+        """Define fallback Python rules for compatibility."""
+        # Add Python-based rules as fallback
+        python_rules = [
             self._rule_coastal_attraction,
             self._rule_family_friendly_playground,
             self._rule_not_family_friendly_age,
             self._rule_coastal_family_destination,
             self._rule_contradiction_detection
         ]
+        
+        # Only add Python rules if no SPARQL rules were loaded
+        if not self.rules:
+            self.rules = python_rules
+            logger.info("Using Python-based reasoning rules")
     
     def _rule_coastal_attraction(self, graph: Graph) -> List[Tuple]:
         """Rule: Attraction in CoastalCity => CoastalAttraction"""

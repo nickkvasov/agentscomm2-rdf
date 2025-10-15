@@ -1,0 +1,186 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix tourism: <http://example.org/tourism#> .
+
+# SHACL Shapes for Tourism Domain Validation
+# Comprehensive validation shapes for tourism domain entities
+
+# City Shape
+tourism:CityShape rdf:type sh:NodeShape ;
+    sh:targetClass tourism:City ;
+    sh:property tourism:CityNameProperty ;
+    sh:property tourism:CityCountryProperty ;
+    sh:property tourism:CityCoastalProperty .
+
+# City Name Property
+tourism:CityNameProperty rdf:type sh:PropertyShape ;
+    sh:path tourism:hasName ;
+    sh:datatype xsd:string ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:message "City must have exactly one name" .
+
+# City Country Property
+tourism:CityCountryProperty rdf:type sh:PropertyShape ;
+    sh:path tourism:inCountry ;
+    sh:class tourism:Country ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:message "City must be in exactly one country" .
+
+# City Coastal Property
+tourism:CityCoastalProperty rdf:type sh:PropertyShape ;
+    sh:path tourism:isCoastal ;
+    sh:datatype xsd:boolean ;
+    sh:maxCount 1 ;
+    sh:message "City can have at most one coastal flag" .
+
+# Attraction Shape
+tourism:AttractionShape rdf:type sh:NodeShape ;
+    sh:targetClass tourism:Attraction ;
+    sh:property tourism:AttractionNameProperty ;
+    sh:property tourism:AttractionLocationProperty ;
+    sh:property tourism:AttractionRatingProperty ;
+    sh:property tourism:AttractionFeeAmountProperty ;
+    sh:property tourism:AttractionFeeCurrencyProperty ;
+    sh:property tourism:AttractionMinAgeProperty ;
+    sh:property tourism:AttractionAmenityProperty .
+
+# Attraction Name Property
+tourism:AttractionNameProperty rdf:type sh:PropertyShape ;
+    sh:path tourism:hasName ;
+    sh:datatype xsd:string ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:message "Attraction must have exactly one name" .
+
+# Attraction Location Property
+tourism:AttractionLocationProperty rdf:type sh:PropertyShape ;
+    sh:path tourism:locatedIn ;
+    sh:class tourism:City ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:message "Attraction must be located in exactly one city" .
+
+# Attraction Rating Property
+tourism:AttractionRatingProperty rdf:type sh:PropertyShape ;
+    sh:path tourism:hasRating ;
+    sh:datatype xsd:decimal ;
+    sh:minInclusive 0.0 ;
+    sh:maxInclusive 5.0 ;
+    sh:maxCount 1 ;
+    sh:message "Attraction rating must be between 0 and 5" .
+
+# Attraction Fee Amount Property
+tourism:AttractionFeeAmountProperty rdf:type sh:PropertyShape ;
+    sh:path tourism:hasEntryFeeAmount ;
+    sh:datatype xsd:decimal ;
+    sh:minInclusive 0.0 ;
+    sh:maxCount 1 ;
+    sh:message "Entry fee amount must be non-negative" .
+
+# Attraction Fee Currency Property
+tourism:AttractionFeeCurrencyProperty rdf:type sh:PropertyShape ;
+    sh:path tourism:hasEntryFeeCurrency ;
+    sh:datatype xsd:string ;
+    sh:pattern "^(AED|USD|EUR)$" ;
+    sh:maxCount 1 ;
+    sh:message "Entry fee currency must be AED, USD, or EUR" .
+
+# Attraction Min Age Property
+tourism:AttractionMinAgeProperty rdf:type sh:PropertyShape ;
+    sh:path tourism:hasMinAge ;
+    sh:datatype xsd:integer ;
+    sh:minInclusive 0 ;
+    sh:maxCount 1 ;
+    sh:message "Minimum age must be non-negative" .
+
+# Attraction Amenity Property
+tourism:AttractionAmenityProperty rdf:type sh:PropertyShape ;
+    sh:path tourism:hasAmenity ;
+    sh:datatype xsd:string ;
+    sh:pattern "^(Playground|Restaurant|Parking|Wifi|Accessible)$" ;
+    sh:message "Amenity must be one of: Playground, Restaurant, Parking, Wifi, Accessible" .
+
+# Coastal Family Destination Shape
+tourism:CoastalFamilyDestinationShape rdf:type sh:NodeShape ;
+    sh:targetClass tourism:CoastalFamilyDestination ;
+    sh:property tourism:CompositeCityProperty ;
+    sh:property tourism:CompositeAttractionProperty ;
+    sh:property tourism:CompositeMinRatingProperty .
+
+# Composite City Property
+tourism:CompositeCityProperty rdf:type sh:PropertyShape ;
+    sh:path tourism:hasCity ;
+    sh:class tourism:CoastalCity ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:message "Coastal family destination must have exactly one coastal city" .
+
+# Composite Attraction Property
+tourism:CompositeAttractionProperty rdf:type sh:PropertyShape ;
+    sh:path tourism:hasPrimaryAttraction ;
+    sh:class tourism:FamilyFriendlyAttraction ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:message "Coastal family destination must have exactly one family-friendly attraction" .
+
+# Composite Min Rating Property
+tourism:CompositeMinRatingProperty rdf:type sh:PropertyShape ;
+    sh:path tourism:hasRating ;
+    sh:minInclusive 4.5 ;
+    sh:message "Coastal family destination must have a rating of at least 4.5" .
+
+# Message Shape
+tourism:MessageShape rdf:type sh:NodeShape ;
+    sh:targetClass tourism:Intent ;
+    sh:property tourism:MessageFromAgentProperty ;
+    sh:property tourism:MessageTimestampProperty .
+
+# Message From Agent Property
+tourism:MessageFromAgentProperty rdf:type sh:PropertyShape ;
+    sh:path tourism:fromAgent ;
+    sh:datatype xsd:string ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:message "Message must have exactly one from agent" .
+
+# Message Timestamp Property
+tourism:MessageTimestampProperty rdf:type sh:PropertyShape ;
+    sh:path tourism:timestamp ;
+    sh:datatype xsd:dateTime ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:message "Message must have exactly one timestamp" .
+
+# Integrity Constraints
+# Disjoint classes constraint
+tourism:DisjointFamilyFriendlyConstraint rdf:type sh:NodeShape ;
+    sh:targetClass tourism:Attraction ;
+    sh:not [
+        sh:and (
+            [ sh:class tourism:FamilyFriendlyAttraction ]
+            [ sh:class tourism:NotFamilyFriendlyAttraction ]
+        )
+    ] ;
+    sh:message "An attraction cannot be both family-friendly and not family-friendly" .
+
+# Functional property constraints
+tourism:FunctionalLocatedInConstraint rdf:type sh:NodeShape ;
+    sh:targetClass tourism:Attraction ;
+    sh:property [ 
+        sh:path tourism:locatedIn ;
+        sh:maxCount 1 ;
+        sh:message "An attraction can only be located in one city"
+    ] .
+
+tourism:FunctionalInCountryConstraint rdf:type sh:NodeShape ;
+    sh:targetClass tourism:City ;
+    sh:property [ 
+        sh:path tourism:inCountry ;
+        sh:maxCount 1 ;
+        sh:message "A city can only be in one country"
+    ] .

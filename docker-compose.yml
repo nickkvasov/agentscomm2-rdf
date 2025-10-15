@@ -10,17 +10,18 @@ services:
     volumes:
       - fuseki_data:/fuseki
       - ./data:/fuseki/data
+      - ./ontology:/fuseki/ontology
+      - ./config/fuseki/fuseki-config.ttl:/fuseki/config.ttl
+      - ./config/fuseki/shiro.ini:/fuseki/shiro.ini
     environment:
-      - FUSEKI_DATASET_1=ds
-      - FUSEKI_DATASET_1_TYPE=tdb2
-      - FUSEKI_DATASET_1_ENABLED=true
-    command: ["--mem", "--update", "/ds"]
+      - FUSEKI_CONFIG=/fuseki/config.ttl
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3030/$/ping"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 10s
 
   gateway:
     build: .
@@ -30,7 +31,7 @@ services:
     depends_on:
       - fuseki
     env_file:
-      - env.local
+      - .env
     environment:
       - FUSEKI_ENDPOINT=http://fuseki:3030/ds
       - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -39,6 +40,7 @@ services:
       - ./src:/app/src
       - ./config:/app/config
       - ./data:/app/data
+      - ./ontology:/app/ontology
     command: ["python", "src/gateway/main.py"]
     restart: unless-stopped
 

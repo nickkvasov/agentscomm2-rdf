@@ -20,6 +20,7 @@ from .models import (
 from ..ontology.tourism_ontology import TourismOntology
 from ..ontology.shacl_shapes import TourismSHACLShapes
 from ..ontology.reasoning_rules import TourismReasoningEngine
+from ..ontology.fuseki_client import FusekiClient
 
 logger = logging.getLogger(__name__)
 
@@ -42,10 +43,17 @@ class ValidatorGateway:
         self.sparql = SPARQLWrapper(self.fuseki_endpoint)
         self.sparql.setReturnFormat(JSON)
         
-        # Initialize components
-        self.ontology = TourismOntology()
-        self.shacl_shapes = TourismSHACLShapes()
-        self.reasoning_engine = TourismReasoningEngine()
+        # Initialize Fuseki client
+        self.fuseki_client = FusekiClient(self.fuseki_endpoint)
+        
+        # Initialize components with FusekiClient
+        self.ontology = TourismOntology(self.fuseki_client)
+        self.shacl_shapes = TourismSHACLShapes(self.fuseki_client)
+        self.reasoning_engine = TourismReasoningEngine(self.fuseki_client)
+        
+        # Load ontology and shapes into Fuseki (required)
+        if not self._load_ontology_to_fuseki():
+            raise RuntimeError("Failed to load ontology into Fuseki - Fuseki is required for operation")
         
         # Agent credentials and permissions
         self.agent_credentials: Dict[str, Dict[str, Any]] = {}
@@ -60,6 +68,64 @@ class ValidatorGateway:
         self.provenance: List[ProvenanceData] = []
         
         logger.info("Validator Gateway initialized")
+    
+    def _load_ontology_to_fuseki(self):
+        """Load ontology, shapes, and rules into Fuseki."""
+        try:
+            import os
+            
+            # Test Fuseki connection first
+            if not self.fuseki_client.test_connection():
+                logger.error("❌ Cannot connect to Fuseki - Fuseki is required")
+                return False
+            
+            # Get ontology directory
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(os.path.dirname(current_dir))
+            ontology_dir = os.path.join(project_root, "ontology")
+            
+            success = True
+            
+            # Load ontology
+            ontology_file = os.path.join(ontology_dir, "tourism_ontology.ttl")
+            if os.path.exists(ontology_file):
+                if not self.fuseki_client.load_ontology(ontology_file):
+                    logger.error(f"❌ Failed to load ontology: {ontology_file}")
+                    success = False
+            else:
+                logger.error(f"❌ Ontology file not found: {ontology_file}")
+                success = False
+            
+            # Load SHACL shapes
+            shapes_file = os.path.join(ontology_dir, "tourism_shacl_shapes.ttl")
+            if os.path.exists(shapes_file):
+                if not self.fuseki_client.load_shacl_shapes(shapes_file):
+                    logger.error(f"❌ Failed to load SHACL shapes: {shapes_file}")
+                    success = False
+            else:
+                logger.error(f"❌ SHACL shapes file not found: {shapes_file}")
+                success = False
+            
+            # Load reasoning rules
+            rules_file = os.path.join(ontology_dir, "tourism_reasoning_rules.ttl")
+            if os.path.exists(rules_file):
+                if not self.fuseki_client.load_reasoning_rules(rules_file):
+                    logger.error(f"❌ Failed to load reasoning rules: {rules_file}")
+                    success = False
+            else:
+                logger.error(f"❌ Reasoning rules file not found: {rules_file}")
+                success = False
+            
+            if success:
+                logger.info("✅ Loaded all ontology components into Fuseki")
+            else:
+                logger.error("❌ Failed to load some ontology components into Fuseki")
+            
+            return success
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to load ontology into Fuseki: {e}")
+            return False
     
     def register_agent(self, agent_id: str, api_key: str, permissions: List[str] = None) -> bool:
         """
@@ -352,64 +418,40 @@ class ValidatorGateway:
     def _get_main_data(self) -> Optional[Graph]:
         """Get main graph data."""
         try:
-            query = """
-            CONSTRUCT { ?s ?p ?o }
-            WHERE {
-                GRAPH <http://example.org/main> {
-                    ?s ?p ?o
-                }
-            }
-            """
-            self.sparql.setQuery(query)
-            results = self.sparql.query().convert()
-            # Convert results to Graph (simplified)
-            return Graph()
+            return self.fuseki_client.get_graph_data(self.fuseki_client.main_graph)
         except:
             return None
     
     def _get_consensus_data(self, session_id: str) -> Optional[Graph]:
         """Get consensus graph data for session."""
         try:
-            query = f"""
-            CONSTRUCT {{ ?s ?p ?o }}
-            WHERE {{
-                GRAPH <http://example.org/consensus/{session_id}> {{
-                    ?s ?p ?o
-                }}
-            }}
-            """
-            self.sparql.setQuery(query)
-            results = self.sparql.query().convert()
-            return Graph()
+            consensus_uri = f"{self.fuseki_client.consensus_graph}/{session_id}"
+            return self.fuseki_client.get_graph_data(consensus_uri)
         except:
             return None
     
     def _get_staging_data(self, staging_graph_uri: str) -> Optional[Graph]:
         """Get staging data."""
         try:
-            query = f"""
-            CONSTRUCT {{ ?s ?p ?o }}
-            WHERE {{
-                GRAPH <{staging_graph_uri}> {{
-                    ?s ?p ?o
-                }}
-            }}
-            """
-            self.sparql.setQuery(query)
-            results = self.sparql.query().convert()
-            return Graph()
+            return self.fuseki_client.get_graph_data(staging_graph_uri)
         except:
             return None
     
     def _commit_to_consensus(self, data: Graph, consensus_uri: str):
         """Commit data to consensus graph."""
-        # Implementation would use SPARQL UPDATE
-        pass
+        try:
+            self.fuseki_client.add_data_to_graph(data, consensus_uri)
+            logger.info(f"✅ Committed data to consensus graph: {consensus_uri}")
+        except Exception as e:
+            logger.error(f"❌ Failed to commit to consensus: {e}")
     
     def _clear_staging(self, staging_uri: str):
         """Clear staging graph."""
-        # Implementation would use SPARQL UPDATE
-        pass
+        try:
+            self.fuseki_client.clear_graph(staging_uri)
+            logger.info(f"✅ Cleared staging graph: {staging_uri}")
+        except Exception as e:
+            logger.error(f"❌ Failed to clear staging: {e}")
     
     def _create_message_notification(self, request: CommitRequest, derived_facts: List[Dict]):
         """Create message notification for other agents."""

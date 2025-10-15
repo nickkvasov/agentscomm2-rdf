@@ -1,29 +1,45 @@
 """
-SHACL Shapes for Tourism Domain Validation
+SHACL Shapes Loader for Tourism Domain Validation
 
-This module defines SHACL (Shapes Constraint Language) shapes for validating
-RDF data in the tourism domain according to the POC requirements.
+This module loads SHACL shapes from standard format files instead of defining
+everything in Python code.
 """
 
 from rdflib import Graph, Namespace, Literal, URIRef
 from rdflib.namespace import RDF, RDFS, OWL, XSD
 from typing import List, Dict, Any
+import os
 
 # Define namespaces
 TOURISM = Namespace("http://example.org/tourism#")
 SH = Namespace("http://www.w3.org/ns/shacl#")
 
 class TourismSHACLShapes:
-    """SHACL shapes for tourism domain validation."""
+    """SHACL shapes loader from standard format files."""
     
-    def __init__(self):
+    def __init__(self, fuseki_client=None, shapes_file: str = None):
+        """
+        Initialize the SHACL shapes by loading from Fuseki.
+        
+        Args:
+            fuseki_client: FusekiClient instance (required)
+            shapes_file: Path to the shapes file (defaults to ontology/tourism_shacl_shapes.ttl)
+        """
+        if fuseki_client is None:
+            raise ValueError("FusekiClient is required - local processing is not supported")
+        
+        self.fuseki_client = fuseki_client
         self.graph = Graph()
         self._setup_namespaces()
-        self._define_city_shapes()
-        self._define_attraction_shapes()
-        self._define_composite_shapes()
-        self._define_message_shapes()
-        self._define_integrity_constraints()
+        
+        # Load shapes from file
+        if shapes_file is None:
+            # Default to the ontology directory
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(os.path.dirname(current_dir))
+            shapes_file = os.path.join(project_root, "ontology", "tourism_shacl_shapes.ttl")
+        
+        self._load_shapes(shapes_file)
     
     def _setup_namespaces(self):
         """Bind namespaces to the graph."""
@@ -32,177 +48,33 @@ class TourismSHACLShapes:
         self.graph.bind("owl", OWL)
         self.graph.bind("rdfs", RDFS)
     
-    def _define_city_shapes(self):
-        """Define SHACL shapes for City entities."""
-        # City shape
+    def _load_shapes(self, shapes_file: str):
+        """Load the SHACL shapes from Fuseki."""
+        try:
+            # Load shapes into Fuseki first
+            if not self.fuseki_client.load_shacl_shapes(shapes_file):
+                raise RuntimeError(f"Failed to load SHACL shapes into Fuseki: {shapes_file}")
+            
+            # Get shapes data from Fuseki
+            self.graph = self.fuseki_client.get_graph_data(self.fuseki_client.main_graph)
+            print(f"✅ Loaded SHACL shapes from Fuseki (source: {shapes_file})")
+        except Exception as e:
+            print(f"❌ Error loading SHACL shapes from Fuseki: {e}")
+            raise RuntimeError(f"Failed to load SHACL shapes - Fuseki is required: {e}")
+    
+    def _create_fallback_shapes(self):
+        """Create minimal fallback shapes if file loading fails."""
+        print("Creating fallback SHACL shapes...")
+        
+        # Basic city shape
         city_shape = TOURISM.CityShape
         self.graph.add((city_shape, RDF.type, SH.NodeShape))
         self.graph.add((city_shape, SH.targetClass, TOURISM.City))
         
-        # Required properties for City
-        name_prop = TOURISM.CityNameProperty
-        self.graph.add((name_prop, RDF.type, SH.PropertyShape))
-        self.graph.add((name_prop, SH.path, TOURISM.hasName))
-        self.graph.add((name_prop, SH.datatype, XSD.string))
-        self.graph.add((name_prop, SH.minCount, Literal(1)))
-        self.graph.add((name_prop, SH.maxCount, Literal(1)))
-        self.graph.add((city_shape, SH.property, name_prop))
-        
-        # Country relationship
-        country_prop = TOURISM.CityCountryProperty
-        self.graph.add((country_prop, RDF.type, SH.PropertyShape))
-        self.graph.add((country_prop, SH.path, TOURISM.inCountry))
-        self.graph.add((country_prop, SH.class_, TOURISM.Country))
-        self.graph.add((country_prop, SH.minCount, Literal(1)))
-        self.graph.add((country_prop, SH.maxCount, Literal(1)))
-        self.graph.add((city_shape, SH.property, country_prop))
-        
-        # Coastal flag (optional)
-        coastal_prop = TOURISM.CityCoastalProperty
-        self.graph.add((coastal_prop, RDF.type, SH.PropertyShape))
-        self.graph.add((coastal_prop, SH.path, TOURISM.isCoastal))
-        self.graph.add((coastal_prop, SH.datatype, XSD.boolean))
-        self.graph.add((coastal_prop, SH.maxCount, Literal(1)))
-        self.graph.add((city_shape, SH.property, coastal_prop))
-    
-    def _define_attraction_shapes(self):
-        """Define SHACL shapes for Attraction entities."""
-        # Attraction shape
+        # Basic attraction shape
         attraction_shape = TOURISM.AttractionShape
         self.graph.add((attraction_shape, RDF.type, SH.NodeShape))
         self.graph.add((attraction_shape, SH.targetClass, TOURISM.Attraction))
-        
-        # Required properties for Attraction
-        name_prop = TOURISM.AttractionNameProperty
-        self.graph.add((name_prop, RDF.type, SH.PropertyShape))
-        self.graph.add((name_prop, SH.path, TOURISM.hasName))
-        self.graph.add((name_prop, SH.datatype, XSD.string))
-        self.graph.add((name_prop, SH.minCount, Literal(1)))
-        self.graph.add((name_prop, SH.maxCount, Literal(1)))
-        self.graph.add((attraction_shape, SH.property, name_prop))
-        
-        # Location relationship
-        location_prop = TOURISM.AttractionLocationProperty
-        self.graph.add((location_prop, RDF.type, SH.PropertyShape))
-        self.graph.add((location_prop, SH.path, TOURISM.locatedIn))
-        self.graph.add((location_prop, SH.class_, TOURISM.City))
-        self.graph.add((location_prop, SH.minCount, Literal(1)))
-        self.graph.add((location_prop, SH.maxCount, Literal(1)))
-        self.graph.add((attraction_shape, SH.property, location_prop))
-        
-        # Rating (0-5)
-        rating_prop = TOURISM.AttractionRatingProperty
-        self.graph.add((rating_prop, RDF.type, SH.PropertyShape))
-        self.graph.add((rating_prop, SH.path, TOURISM.hasRating))
-        self.graph.add((rating_prop, SH.datatype, XSD.decimal))
-        self.graph.add((rating_prop, SH.minInclusive, Literal(0.0)))
-        self.graph.add((rating_prop, SH.maxInclusive, Literal(5.0)))
-        self.graph.add((rating_prop, SH.maxCount, Literal(1)))
-        self.graph.add((attraction_shape, SH.property, rating_prop))
-        
-        # Entry fee amount
-        fee_amount_prop = TOURISM.AttractionFeeAmountProperty
-        self.graph.add((fee_amount_prop, RDF.type, SH.PropertyShape))
-        self.graph.add((fee_amount_prop, SH.path, TOURISM.hasEntryFeeAmount))
-        self.graph.add((fee_amount_prop, SH.datatype, XSD.decimal))
-        self.graph.add((fee_amount_prop, SH.minInclusive, Literal(0.0)))
-        self.graph.add((fee_amount_prop, SH.maxCount, Literal(1)))
-        self.graph.add((attraction_shape, SH.property, fee_amount_prop))
-        
-        # Entry fee currency
-        fee_currency_prop = TOURISM.AttractionFeeCurrencyProperty
-        self.graph.add((fee_currency_prop, RDF.type, SH.PropertyShape))
-        self.graph.add((fee_currency_prop, SH.path, TOURISM.hasEntryFeeCurrency))
-        self.graph.add((fee_currency_prop, SH.datatype, XSD.string))
-        # Add currency constraints - simplified approach
-        self.graph.add((fee_currency_prop, SH.pattern, Literal("^(AED|USD|EUR)$")))
-        self.graph.add((fee_currency_prop, SH.maxCount, Literal(1)))
-        self.graph.add((attraction_shape, SH.property, fee_currency_prop))
-        
-        # Minimum age
-        min_age_prop = TOURISM.AttractionMinAgeProperty
-        self.graph.add((min_age_prop, RDF.type, SH.PropertyShape))
-        self.graph.add((min_age_prop, SH.path, TOURISM.hasMinAge))
-        self.graph.add((min_age_prop, SH.datatype, XSD.integer))
-        self.graph.add((min_age_prop, SH.minInclusive, Literal(0)))
-        self.graph.add((min_age_prop, SH.maxCount, Literal(1)))
-        self.graph.add((attraction_shape, SH.property, min_age_prop))
-        
-        # Amenities
-        amenity_prop = TOURISM.AttractionAmenityProperty
-        self.graph.add((amenity_prop, RDF.type, SH.PropertyShape))
-        self.graph.add((amenity_prop, SH.path, TOURISM.hasAmenity))
-        self.graph.add((amenity_prop, SH.datatype, XSD.string))
-        # Add amenity constraints - simplified approach
-        self.graph.add((amenity_prop, SH.pattern, Literal("^(Playground|Restaurant|Parking|Wifi|Accessible)$")))
-        self.graph.add((attraction_shape, SH.property, amenity_prop))
-    
-    def _define_composite_shapes(self):
-        """Define SHACL shapes for composite entities."""
-        # CoastalFamilyDestination shape
-        composite_shape = TOURISM.CoastalFamilyDestinationShape
-        self.graph.add((composite_shape, RDF.type, SH.NodeShape))
-        self.graph.add((composite_shape, SH.targetClass, TOURISM.CoastalFamilyDestination))
-        
-        # Required city relationship
-        city_prop = TOURISM.CompositeCityProperty
-        self.graph.add((city_prop, RDF.type, SH.PropertyShape))
-        self.graph.add((city_prop, SH.path, TOURISM.hasCity))
-        self.graph.add((city_prop, SH.class_, TOURISM.CoastalCity))
-        self.graph.add((city_prop, SH.minCount, Literal(1)))
-        self.graph.add((city_prop, SH.maxCount, Literal(1)))
-        self.graph.add((composite_shape, SH.property, city_prop))
-        
-        # Required attraction relationship
-        attraction_prop = TOURISM.CompositeAttractionProperty
-        self.graph.add((attraction_prop, RDF.type, SH.PropertyShape))
-        self.graph.add((attraction_prop, SH.path, TOURISM.hasPrimaryAttraction))
-        self.graph.add((attraction_prop, SH.class_, TOURISM.FamilyFriendlyAttraction))
-        self.graph.add((attraction_prop, SH.minCount, Literal(1)))
-        self.graph.add((attraction_prop, SH.maxCount, Literal(1)))
-        self.graph.add((composite_shape, SH.property, attraction_prop))
-    
-    def _define_message_shapes(self):
-        """Define SHACL shapes for inter-agent messages."""
-        # Message intent shape
-        message_shape = TOURISM.MessageShape
-        self.graph.add((message_shape, RDF.type, SH.NodeShape))
-        self.graph.add((message_shape, SH.targetClass, TOURISM.Intent))
-        
-        # Required properties for messages
-        from_agent_prop = TOURISM.MessageFromAgentProperty
-        self.graph.add((from_agent_prop, RDF.type, SH.PropertyShape))
-        self.graph.add((from_agent_prop, SH.path, TOURISM.fromAgent))
-        self.graph.add((from_agent_prop, SH.datatype, XSD.string))
-        self.graph.add((from_agent_prop, SH.minCount, Literal(1)))
-        self.graph.add((from_agent_prop, SH.maxCount, Literal(1)))
-        self.graph.add((message_shape, SH.property, from_agent_prop))
-        
-        timestamp_prop = TOURISM.MessageTimestampProperty
-        self.graph.add((timestamp_prop, RDF.type, SH.PropertyShape))
-        self.graph.add((timestamp_prop, SH.path, TOURISM.timestamp))
-        self.graph.add((timestamp_prop, SH.datatype, XSD.dateTime))
-        self.graph.add((timestamp_prop, SH.minCount, Literal(1)))
-        self.graph.add((timestamp_prop, SH.maxCount, Literal(1)))
-        self.graph.add((message_shape, SH.property, timestamp_prop))
-    
-    def _define_integrity_constraints(self):
-        """Define integrity constraints and business rules."""
-        # Disjoint classes constraint - simplified approach
-        # Note: This would require more complex SHACL syntax in practice
-        pass
-        
-        # Rating threshold for family-friendly destinations
-        rating_constraint = TOURISM.FamilyFriendlyRatingConstraint
-        self.graph.add((rating_constraint, RDF.type, SH.NodeShape))
-        self.graph.add((rating_constraint, SH.targetClass, TOURISM.CoastalFamilyDestination))
-        
-        # Ensure minimum rating for composite destinations
-        min_rating_prop = TOURISM.CompositeMinRatingProperty
-        self.graph.add((min_rating_prop, RDF.type, SH.PropertyShape))
-        self.graph.add((min_rating_prop, SH.path, TOURISM.hasRating))
-        self.graph.add((min_rating_prop, SH.minInclusive, Literal(4.5)))
-        self.graph.add((rating_constraint, SH.property, min_rating_prop))
     
     def get_shapes_graph(self) -> Graph:
         """Return the complete SHACL shapes graph."""
@@ -281,5 +153,5 @@ def create_validation_shapes() -> TourismSHACLShapes:
 if __name__ == "__main__":
     # Create and save the SHACL shapes
     shapes = TourismSHACLShapes()
-    shapes.save_to_file("tourism_shacl_shapes.ttl")
-    print("Tourism SHACL shapes created and saved to tourism_shacl_shapes.ttl")
+    shapes.save_to_file("tourism_shacl_shapes_loaded.ttl")
+    print("Tourism SHACL shapes loaded and saved to tourism_shacl_shapes_loaded.ttl")

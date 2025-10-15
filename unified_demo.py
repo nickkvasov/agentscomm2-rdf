@@ -49,10 +49,7 @@ def run_logical_validation_demo():
         from src.ontology.reasoning_rules import TourismReasoningEngine
         from src.gateway.validator_gateway import ValidatorGateway
         
-        # Initialize components
-        ontology = TourismOntology()
-        shapes = TourismSHACLShapes()
-        engine = TourismReasoningEngine()
+        # Initialize gateway (which includes all components with FusekiClient)
         gateway = ValidatorGateway()
         
         print("✅ Logical validation components initialized")
@@ -147,6 +144,7 @@ def run_llm_agents_demo():
             return True
         
         from src.agents.langgraph_agents import create_langgraph_agents
+        from src.gateway.validator_gateway import ValidatorGateway
         
         # Determine provider
         if openai_key:
@@ -156,8 +154,11 @@ def run_llm_agents_demo():
         
         print(f"✅ Using {provider} LLM provider")
         
-        # Create agents
-        agents = create_langgraph_agents(provider, api_key)
+        # Initialize gateway (which includes FusekiClient)
+        gateway = ValidatorGateway()
+        
+        # Create agents with gateway
+        agents = create_langgraph_agents(provider, api_key, gateway)
         print("✅ LangGraph agents created successfully")
         
         # Test LLM Agent Collaboration
