@@ -455,6 +455,652 @@ The demo shows two types of validation:
 - 🤖 Agents detect contradictions intelligently
 - 🤖 Agents understand context and meaning
 
+## 🔧 **Testing and Demo Functions**
+
+### **Demo vs Real Agent Work**
+
+This POC system includes several functions specifically designed for **testing and demonstration purposes** rather than real agent work. These functions help showcase the system's capabilities without requiring complex real-world data sources.
+
+#### **🤖 Agent Testing Functions**
+
+##### **Collect Agent: `collect_sample_enrichments()`**
+```python
+def collect_sample_enrichments(self):
+    """Collect sample enrichment data for testing."""
+    # Add rating enrichment for Dubai Aquarium
+    self.add_collection_task("rating_enrichment", attraction_uri, {"rating": 4.8})
+    
+    # Add amenity enrichment
+    self.add_collection_task("amenity_enrichment", attraction_uri, {"amenities": ["Wifi", "Accessible"]})
+    
+    # Add age restriction (intentional contradiction for testing)
+    self.add_collection_task("age_restriction", attraction_uri, {"min_age": 16})
+```
+
+**Purpose:**
+- **🧪 Testing**: Provides concrete data to test the validation system
+- **🔍 Contradiction Testing**: Creates intentional contradictions to test detection
+- **📊 Demonstration**: Shows how agents enrich existing data
+- **🔄 Pipeline Testing**: Tests the complete data flow from collection to commit
+
+##### **Ingest Agent: Sample Data Processing**
+```python
+def process_sample_data(self):
+    """Process sample tourism data for demonstration."""
+    sample_data = [
+        "Dubai Aquarium is a family-friendly attraction with 4.6 rating",
+        "Burj Khalifa is a landmark in Dubai with 4.9 rating",
+        "Dubai Marina has luxury hotels and restaurants"
+    ]
+    # Process each sample with domain knowledge
+```
+
+**Purpose:**
+- **📝 Data Processing**: Shows how agents convert natural language to RDF
+- **🏗️ Knowledge Building**: Demonstrates incremental knowledge construction
+- **🔍 Validation**: Tests data quality and consistency checks
+
+##### **Reason Agent: Contradiction Detection Testing**
+```python
+def test_contradiction_detection(self):
+    """Test contradiction detection with sample scenarios."""
+    # Create scenarios that should trigger contradictions
+    contradiction_scenarios = [
+        "Hotel X is both family-friendly and not family-friendly",
+        "Attraction Y has rating 6.0 (invalid range)",
+        "Restaurant Z is both coastal and inland"
+    ]
+```
+
+**Purpose:**
+- **🚨 Contradiction Testing**: Verifies the system can detect logical conflicts
+- **🧠 Reasoning Testing**: Tests SWRL rules and reasoning capabilities
+- **✅ Validation Testing**: Ensures quality control mechanisms work
+
+#### **🔧 System Testing Functions**
+
+##### **Validator Gateway: Test Scenarios**
+```python
+def run_validation_tests(self):
+    """Run comprehensive validation tests."""
+    test_cases = [
+        {"type": "valid_data", "expected": "pass"},
+        {"type": "invalid_rating", "expected": "fail"},
+        {"type": "contradiction", "expected": "fail"},
+        {"type": "missing_required", "expected": "fail"}
+    ]
+```
+
+**Purpose:**
+- **✅ Validation Testing**: Tests all validation layers (SHACL, SWRL, consistency)
+- **🔄 Pipeline Testing**: Verifies the complete validation pipeline
+- **🚨 Error Handling**: Tests rollback and error recovery mechanisms
+
+##### **Ontology Testing: Knowledge Extraction**
+```python
+def test_ontology_knowledge_extraction(self):
+    """Test ontology knowledge extraction for LLM agents."""
+    ontology_knowledge = self._extract_ontology_knowledge()
+    # Verify agents have access to domain knowledge
+```
+
+**Purpose:**
+- **🧠 Domain Knowledge**: Tests dynamic ontology knowledge extraction
+- **🤖 LLM Integration**: Verifies agents have comprehensive domain access
+- **📊 Knowledge Quality**: Ensures extracted knowledge is accurate and complete
+
+#### **📊 Demo Data Functions**
+
+##### **Sample Tourism Data**
+```python
+SAMPLE_TOURISM_DATA = {
+    "cities": ["Dubai", "Abu Dhabi", "Sharjah"],
+    "attractions": ["Dubai Aquarium", "Burj Khalifa", "Palm Jumeirah"],
+    "hotels": ["Marina Plaza", "Coastal Resort", "City Center Hotel"],
+    "restaurants": ["Coastal Bistro", "Family Diner", "Luxury Restaurant"]
+}
+```
+
+**Purpose:**
+- **🏗️ Knowledge Base**: Provides foundational data for testing
+- **🔄 Relationship Testing**: Tests how entities relate to each other
+- **📊 Reasoning Testing**: Enables testing of derived facts and relationships
+
+##### **Contradiction Scenarios**
+```python
+CONTRADICTION_SCENARIOS = [
+    "Entity is both family-friendly and not family-friendly",
+    "Rating outside valid range (0-5)",
+    "Entity in both coastal and inland locations",
+    "Conflicting amenity information"
+]
+```
+
+**Purpose:**
+- **🚨 Contradiction Testing**: Provides scenarios to test conflict detection
+- **🧠 Reasoning Testing**: Tests SWRL rules for contradiction detection
+- **✅ Validation Testing**: Ensures quality control mechanisms work
+
+#### **🎯 Why These Functions Are Needed**
+
+##### **1. POC Demonstration**
+- **Show System Capabilities**: Demonstrate what the system can do
+- **Validate Architecture**: Prove the multi-agent collaboration works
+- **Test Integration**: Verify all components work together
+
+##### **2. Development and Testing**
+- **Rapid Prototyping**: Quickly test new features and capabilities
+- **Integration Testing**: Test component interactions
+- **Performance Testing**: Measure system performance with known data
+
+##### **3. Quality Assurance**
+- **Validation Testing**: Ensure all validation mechanisms work
+- **Contradiction Testing**: Verify conflict detection capabilities
+- **Reasoning Testing**: Test SWRL rules and logical reasoning
+
+##### **4. Educational Value**
+- **System Understanding**: Help users understand how the system works
+- **Capability Demonstration**: Show the power of multi-agent collaboration
+- **Best Practices**: Demonstrate proper data handling and validation
+
+#### **🚫 What These Functions Are NOT**
+
+- **❌ Real Agent Work**: These are not production agent functions
+- **❌ Real Data Sources**: They don't connect to external APIs or databases
+- **❌ Production Ready**: They're designed for demonstration, not production use
+- **❌ Scalable**: They use hardcoded data, not dynamic data collection
+
+#### **🔄 How They Work in the Demo**
+
+1. **Data Generation**: Functions create sample data for testing
+2. **Agent Processing**: Agents process the sample data with domain knowledge
+3. **Validation Testing**: System validates the processed data
+4. **Contradiction Testing**: System detects and handles contradictions
+5. **Reasoning Testing**: SWRL rules derive new insights
+6. **Integration Testing**: Complete pipeline is tested end-to-end
+
+These testing functions are essential for making the POC system functional, demonstrable, and educational while avoiding the complexity of real-world data integration.
+
+## 🤖 **LLM Agent System Prompts**
+
+### **📋 Overview**
+
+The system uses **three specialized agents** with distinct system prompts, each designed for specific roles in the multi-agent collaboration system. All agents have access to **comprehensive tourism domain knowledge** extracted from the ontology.
+
+### **🔧 Agent System Prompts**
+
+#### **1. 🍽️ Ingest Agent System Prompt**
+
+```python
+system_prompt = f"""
+You are an Ingest Agent for a tourism knowledge graph system.
+Your role is to:
+1. Parse and normalize tourism data from various sources
+2. Convert data to RDF format using the tourism ontology
+3. Validate data quality using SHACL shapes
+4. Ensure data follows the tourism domain model
+
+TOURISM ONTOLOGY KNOWLEDGE:
+Classes: {', '.join(ontology_info['classes'])}
+Object Properties: {', '.join(ontology_info['object_properties'])}
+Datatype Properties: {', '.join(ontology_info['datatype_properties'])}
+Relationships: {'; '.join(ontology_info['relationships'])}
+Namespace: {ontology_info['namespace']}
+Prefix: {ontology_info['prefix']}
+
+Available tools:
+- parse_tourism_data: Parse raw data to RDF
+- validate_rdf_data: Validate RDF using SHACL
+
+Always provide structured RDF output and validation results.
+Use the ontology classes and properties listed above.
+"""
+```
+
+**Purpose:**
+- **📝 Data Ingestion**: Converts natural language to structured RDF
+- **🏗️ Knowledge Building**: Creates foundational knowledge base
+- **✅ Quality Control**: Ensures data follows domain model
+- **🔍 Validation**: Validates data against SHACL shapes
+
+#### **2. 📊 Collect Agent System Prompt**
+
+```python
+system_prompt = """
+You are a Collect Agent for a tourism knowledge graph system.
+Your role is to:
+1. Enrich existing data with additional information
+2. Collect complementary facts about tourism entities
+3. Detect and report data quality issues
+4. Suggest improvements to the knowledge graph
+
+Available tools:
+- enrich_attraction_data: Add enrichment data
+- detect_data_quality_issues: Check data quality
+
+Focus on data enrichment and quality improvement.
+"""
+```
+
+**Purpose:**
+- **📈 Data Enrichment**: Adds additional information to existing entities
+- **🔍 Quality Analysis**: Detects and reports data quality issues
+- **💡 Improvements**: Suggests enhancements to the knowledge graph
+- **🔄 Complementary Facts**: Collects related information
+
+#### **3. 🧠 Reason Agent System Prompt**
+
+```python
+system_prompt = """
+You are a Reason Agent for a tourism knowledge graph system.
+Your role is to:
+1. Analyze the knowledge graph for higher-level patterns
+2. Detect logical contradictions and inconsistencies
+3. Identify composite entities and relationships
+4. Provide insights and recommendations
+
+Available tools:
+- analyze_composite_destinations: Find composite entities
+- detect_contradictions: Check for logical conflicts
+
+Focus on reasoning, analysis, and insight generation.
+"""
+```
+
+**Purpose:**
+- **🧠 Higher-Level Analysis**: Identifies patterns and relationships
+- **🚨 Contradiction Detection**: Finds logical conflicts and inconsistencies
+- **🔗 Composite Entities**: Discovers complex relationships
+- **💡 Insights**: Provides recommendations and insights
+
+### **🛠️ Tool-Specific Prompts**
+
+#### **1. Parse Tourism Data Tool**
+```python
+prompt = f"""
+Parse the following tourism data and convert it to RDF Turtle format.
+
+TOURISM ONTOLOGY KNOWLEDGE:
+Classes: {', '.join(ontology_info['classes'])}
+Object Properties: {', '.join(ontology_info['object_properties'])}
+Datatype Properties: {', '.join(ontology_info['datatype_properties'])}
+Relationships: {'; '.join(ontology_info['relationships'])}
+Namespace: {ontology_info['namespace']}
+Prefix: {ontology_info['prefix']}
+
+Use the tourism ontology classes and properties listed above.
+Create proper RDF triples with correct subject-predicate-object relationships.
+
+Data: {data}
+
+Return only the RDF Turtle format.
+"""
+```
+
+#### **2. Enrich Attraction Data Tool**
+```python
+prompt = f"""
+Enrich the attraction {attraction_uri} with the following data:
+{enrichment_data}
+
+Return RDF Turtle format with the enrichment.
+"""
+```
+
+### **🎯 Key Features of System Prompts**
+
+#### **1. 🧠 Dynamic Domain Knowledge**
+- **Real-time Ontology Access**: Agents get live ontology knowledge
+- **Comprehensive Schema**: Full access to classes, properties, and relationships
+- **Namespace Awareness**: Proper URI and prefix usage
+- **Domain Compliance**: Ensures generated data follows tourism domain model
+
+#### **2. 🔧 Specialized Roles**
+- **Ingest Agent**: Focus on data parsing and validation
+- **Collect Agent**: Focus on enrichment and quality improvement
+- **Reason Agent**: Focus on analysis and contradiction detection
+
+#### **3. 🛠️ Tool Integration**
+- **Available Tools**: Each agent has specific tools for its role
+- **Tool Descriptions**: Clear explanations of what each tool does
+- **Usage Guidance**: Instructions on when and how to use tools
+
+#### **4. 📊 Output Requirements**
+- **Structured Output**: Clear requirements for RDF format
+- **Validation Results**: Expected validation and quality feedback
+- **Domain Compliance**: Ensures output follows tourism ontology
+
+### **🔄 How System Prompts Work**
+
+#### **1. Agent Initialization**
+```python
+# Extract ontology knowledge for LLM agents
+self.ontology_knowledge = self._extract_ontology_knowledge()
+
+# Create agents with domain knowledge
+self.agents = {
+    "ingest": self._create_ingest_agent(),
+    "collect": self._create_collect_agent(),
+    "reason": self._create_reason_agent()
+}
+```
+
+#### **2. Prompt Generation**
+```python
+# Create system prompt with ontology knowledge
+ontology_info = self.ontology_knowledge
+system_prompt = f"""
+You are an Ingest Agent for a tourism knowledge graph system.
+...
+TOURISM ONTOLOGY KNOWLEDGE:
+Classes: {', '.join(ontology_info['classes'])}
+Object Properties: {', '.join(ontology_info['object_properties'])}
+...
+"""
+```
+
+#### **3. LLM Invocation**
+```python
+# Create prompt with context
+prompt = ChatPromptTemplate.from_messages([
+    ("system", system_prompt),
+    ("human", "{input}")
+])
+
+# Get LLM response
+response = self.llm.invoke(prompt.format_messages(input=last_message.content))
+```
+
+### **🎯 Benefits of These System Prompts**
+
+#### **1. 🧠 Domain Awareness**
+- **Comprehensive Knowledge**: Agents understand the complete tourism domain
+- **Precise Classification**: Agents use correct classes and properties
+- **Relationship Understanding**: Agents understand domain relationships
+
+#### **2. 🔧 Specialized Functionality**
+- **Role Clarity**: Each agent has a clear, specialized role
+- **Tool Integration**: Agents have access to relevant tools
+- **Output Quality**: Clear requirements ensure high-quality output
+
+#### **3. 📊 Consistency**
+- **Standardized Format**: All agents follow the same prompt structure
+- **Domain Compliance**: All agents use the same ontology knowledge
+- **Quality Assurance**: All agents focus on data quality and validation
+
+#### **4. 🚀 Scalability**
+- **Dynamic Knowledge**: Ontology changes automatically reflected in prompts
+- **Tool Extensibility**: Easy to add new tools and capabilities
+- **Role Flexibility**: Easy to modify agent roles and responsibilities
+
+These system prompts ensure that the LLM agents have comprehensive domain knowledge, clear roles, and the ability to produce high-quality, domain-compliant RDF output while maintaining consistency across the multi-agent collaboration system.
+
+## 🔍 **Real LLM Agent Queries**
+
+### **📋 Overview**
+
+The system sends **real queries to LLM providers** (OpenAI GPT-4o-mini or Anthropic Claude) with comprehensive domain knowledge and specific instructions. Here are examples of actual queries sent to the LLM during agent execution.
+
+### **🤖 Agent Query Examples**
+
+#### **1. 🍽️ Ingest Agent Query**
+
+**Input Data:**
+```
+Dubai is a beautiful coastal city in the UAE. The Dubai Aquarium is a major attraction 
+with a playground, rating 4.6, entry fee 25 AED. There's also a new theme park 
+with age restriction 16+, rating 4.2, entry fee 50 AED.
+```
+
+**Actual LLM Query:**
+```
+You are an Ingest Agent for a tourism knowledge graph system.
+Your role is to:
+1. Parse and normalize tourism data from various sources
+2. Convert data to RDF format using the tourism ontology
+3. Validate data quality using SHACL shapes
+4. Ensure data follows the tourism domain model
+
+TOURISM ONTOLOGY KNOWLEDGE:
+Classes: Attraction, City, CoastalAttraction, CoastalCity, CoastalFamilyDestination, Contradiction, Country, FamilyFriendlyAttraction, NotFamilyFriendlyAttraction
+Object Properties: inCountry, locatedIn
+Datatype Properties: hasAmenity, hasEntryFeeAmount, hasEntryFeeCurrency, hasMinAge, hasName, hasRating, isCoastal, population
+Relationships: 
+Namespace: http://example.org/tourism#
+Prefix: tourism
+
+Available tools:
+- parse_tourism_data: Parse raw data to RDF
+- validate_rdf_data: Validate RDF using SHACL
+
+Always provide structured RDF output and validation results.
+Use the ontology classes and properties listed above.
+
+Parse the following tourism data and convert it to RDF Turtle format.
+
+TOURISM ONTOLOGY KNOWLEDGE:
+Classes: Attraction, City, CoastalAttraction, CoastalCity, CoastalFamilyDestination, Contradiction, Country, FamilyFriendlyAttraction, NotFamilyFriendlyAttraction
+Object Properties: inCountry, locatedIn
+Datatype Properties: hasAmenity, hasEntryFeeAmount, hasEntryFeeCurrency, hasMinAge, hasName, hasRating, isCoastal, population
+Relationships: 
+Namespace: http://example.org/tourism#
+Prefix: tourism
+
+Use the tourism ontology classes and properties listed above.
+Create proper RDF triples with correct subject-predicate-object relationships.
+
+Data: Dubai is a beautiful coastal city in the UAE. The Dubai Aquarium is a major attraction 
+with a playground, rating 4.6, entry fee 25 AED. There's also a new theme park 
+with age restriction 16+, rating 4.2, entry fee 50 AED.
+
+Return only the RDF Turtle format.
+```
+
+**Expected LLM Response:**
+```turtle
+@prefix tourism: <http://example.org/tourism#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+tourism:Dubai rdf:type tourism:CoastalCity .
+tourism:Dubai tourism:hasName "Dubai" .
+tourism:Dubai tourism:isCoastal true .
+tourism:Dubai tourism:inCountry tourism:UAE .
+
+tourism:UAE rdf:type tourism:Country .
+tourism:UAE tourism:hasName "UAE" .
+
+tourism:DubaiAquarium rdf:type tourism:Attraction .
+tourism:DubaiAquarium tourism:hasName "Dubai Aquarium" .
+tourism:DubaiAquarium tourism:locatedIn tourism:Dubai .
+tourism:DubaiAquarium tourism:hasRating 4.6 .
+tourism:DubaiAquarium tourism:hasAmenity "Playground" .
+tourism:DubaiAquarium tourism:hasEntryFeeAmount 25.0 .
+tourism:DubaiAquarium tourism:hasEntryFeeCurrency "AED" .
+
+tourism:ThemePark rdf:type tourism:Attraction .
+tourism:ThemePark tourism:hasName "Theme Park" .
+tourism:ThemePark tourism:locatedIn tourism:Dubai .
+tourism:ThemePark tourism:hasRating 4.2 .
+tourism:ThemePark tourism:hasMinAge 16 .
+tourism:ThemePark tourism:hasEntryFeeAmount 50.0 .
+tourism:ThemePark tourism:hasEntryFeeCurrency "AED" .
+```
+
+#### **2. 📊 Collect Agent Query**
+
+**Input Data:**
+```
+Enrich the Dubai Aquarium with additional information: it has a gift shop, 
+restaurant, and is wheelchair accessible. The attraction is open daily from 10 AM to 10 PM.
+```
+
+**Actual LLM Query:**
+```
+You are a Collect Agent for a tourism knowledge graph system.
+Your role is to:
+1. Enrich existing data with additional information
+2. Collect complementary facts about tourism entities
+3. Detect and report data quality issues
+4. Suggest improvements to the knowledge graph
+
+Available tools:
+- enrich_attraction_data: Add enrichment data
+- detect_data_quality_issues: Check data quality
+
+Focus on data enrichment and quality improvement.
+
+Enrich the attraction tourism:DubaiAquarium with the following data:
+it has a gift shop, restaurant, and is wheelchair accessible. The attraction is open daily from 10 AM to 10 PM.
+
+Return RDF Turtle format with the enrichment.
+```
+
+**Expected LLM Response:**
+```turtle
+@prefix tourism: <http://example.org/tourism#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+tourism:DubaiAquarium tourism:hasAmenity "Gift Shop" .
+tourism:DubaiAquarium tourism:hasAmenity "Restaurant" .
+tourism:DubaiAquarium tourism:hasAmenity "Wheelchair Accessible" .
+tourism:DubaiAquarium tourism:hasOperatingHours "10:00-22:00" .
+```
+
+#### **3. 🧠 Reason Agent Query**
+
+**Input Data:**
+```
+Analyze the knowledge graph for composite destinations and detect any contradictions.
+```
+
+**Actual LLM Query:**
+```
+You are a Reason Agent for a tourism knowledge graph system.
+Your role is to:
+1. Analyze the knowledge graph for higher-level patterns
+2. Detect logical contradictions and inconsistencies
+3. Identify composite entities and relationships
+4. Provide insights and recommendations
+
+Available tools:
+- analyze_composite_destinations: Find composite entities
+- detect_contradictions: Check for logical conflicts
+
+Focus on reasoning, analysis, and insight generation.
+
+Analyze the knowledge graph for composite destinations and detect any contradictions.
+```
+
+**Expected LLM Response:**
+```
+🎯 Found 1 composite destination: tourism:Dubai
+⚠️ Found 1 contradiction: tourism:ThemePark has both age restriction 16+ and playground amenity
+```
+
+### **🔄 Query Processing Flow**
+
+#### **1. Query Construction**
+```python
+# Extract ontology knowledge
+ontology_info = self.ontology_knowledge
+
+# Create system prompt with domain knowledge
+system_prompt = f"""
+You are an Ingest Agent for a tourism knowledge graph system.
+...
+TOURISM ONTOLOGY KNOWLEDGE:
+Classes: {', '.join(ontology_info['classes'])}
+Object Properties: {', '.join(ontology_info['object_properties'])}
+Datatype Properties: {', '.join(ontology_info['datatype_properties'])}
+...
+"""
+
+# Create tool-specific prompt
+tool_prompt = f"""
+Parse the following tourism data and convert it to RDF Turtle format.
+...
+Data: {data}
+Return only the RDF Turtle format.
+"""
+```
+
+#### **2. LLM Invocation**
+```python
+# Create prompt with context
+prompt = ChatPromptTemplate.from_messages([
+    ("system", system_prompt),
+    ("human", "{input}")
+])
+
+# Get LLM response
+response = self.llm.invoke(prompt.format_messages(input=last_message.content))
+```
+
+#### **3. Response Processing**
+```python
+# Parse LLM response
+rdf_data = response.content
+
+# Validate RDF data
+validation_result = self.validate_rdf_data(rdf_data)
+
+# Process validated data
+if validation_result.startswith("✅"):
+    # Add to knowledge graph
+    self.add_to_knowledge_graph(rdf_data)
+else:
+    # Handle validation errors
+    self.handle_validation_error(validation_result)
+```
+
+### **🎯 Key Features of LLM Queries**
+
+#### **1. 🧠 Comprehensive Domain Knowledge**
+- **Full Ontology Access**: Agents receive complete tourism domain schema
+- **Dynamic Knowledge**: Ontology changes automatically reflected in queries
+- **Namespace Awareness**: Proper URI and prefix usage in all queries
+- **Relationship Understanding**: Agents understand domain relationships
+
+#### **2. 🔧 Specialized Instructions**
+- **Role-Specific**: Each agent receives instructions tailored to its role
+- **Tool Integration**: Clear instructions on available tools and their usage
+- **Output Requirements**: Specific format requirements for responses
+- **Quality Standards**: Instructions ensure high-quality output
+
+#### **3. 📊 Context-Rich Queries**
+- **System Context**: Comprehensive system prompts with domain knowledge
+- **Tool Context**: Specific instructions for each tool
+- **Data Context**: Clear input data with expected output format
+- **Validation Context**: Instructions for data quality and validation
+
+#### **4. 🚀 Scalable Architecture**
+- **Dynamic Prompts**: Prompts adapt to ontology changes
+- **Tool Extensibility**: Easy to add new tools and capabilities
+- **Role Flexibility**: Easy to modify agent roles and instructions
+- **Provider Agnostic**: Works with OpenAI, Anthropic, and other LLM providers
+
+### **📊 Query Performance**
+
+#### **1. Response Quality**
+- **Domain Compliance**: LLM responses follow tourism ontology
+- **Format Accuracy**: Responses are properly formatted RDF
+- **Content Quality**: High-quality, accurate tourism data
+- **Validation Success**: Responses pass SHACL validation
+
+#### **2. Processing Efficiency**
+- **Context Optimization**: Prompts include only necessary information
+- **Tool Integration**: Efficient tool usage and response processing
+- **Error Handling**: Robust error handling and validation
+- **Performance**: Fast response times with quality results
+
+#### **3. Consistency**
+- **Standardized Format**: All agents follow the same query structure
+- **Domain Knowledge**: Consistent use of tourism ontology
+- **Output Quality**: Consistent high-quality responses
+- **Validation**: Consistent validation and error handling
+
+These real LLM queries demonstrate how the system leverages comprehensive domain knowledge, specialized agent roles, and context-rich prompts to produce high-quality, domain-compliant RDF output while maintaining consistency and scalability across the multi-agent collaboration system.
+
 ## 📊 **Real Results**
 
 ```
