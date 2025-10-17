@@ -17,6 +17,7 @@ from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
+from rdflib.namespace import RDF, RDFS, OWL
 
 from ..ontology.tourism_ontology import TourismOntology
 from ..ontology.shacl_shapes import TourismSHACLShapes
@@ -66,6 +67,9 @@ class TourismLangGraphAgents:
             self.shacl_shapes = TourismSHACLShapes()
             self.reasoning_engine = TourismReasoningEngine()
         
+        # Extract ontology knowledge for LLM agents
+        self.ontology_knowledge = self._extract_ontology_knowledge()
+        
         # Agent configurations
         self.agents = {
             "ingest": self._create_ingest_agent(),
@@ -77,6 +81,93 @@ class TourismLangGraphAgents:
         self.workflow = self._create_workflow()
         
         logger.info("LangGraph agents initialized")
+    
+    def _extract_ontology_knowledge(self) -> Dict[str, Any]:
+        """Extract comprehensive ontology knowledge for LLM agents."""
+        try:
+            ontology_graph = self.ontology.get_ontology_graph()
+            
+            # Extract classes - look for rdf:type owl:Class
+            classes = []
+            for s, p, o in ontology_graph.triples((None, RDF.type, OWL.Class)):
+                if str(s).startswith("http://example.org/tourism#"):
+                    class_name = str(s).split("#")[-1]
+                    classes.append(class_name)
+            
+            # Extract object properties - look for rdf:type owl:ObjectProperty
+            object_properties = []
+            for s, p, o in ontology_graph.triples((None, RDF.type, OWL.ObjectProperty)):
+                if str(s).startswith("http://example.org/tourism#"):
+                    prop_name = str(s).split("#")[-1]
+                    object_properties.append(prop_name)
+            
+            # Extract datatype properties - look for rdf:type owl:DatatypeProperty
+            datatype_properties = []
+            for s, p, o in ontology_graph.triples((None, RDF.type, OWL.DatatypeProperty)):
+                if str(s).startswith("http://example.org/tourism#"):
+                    prop_name = str(s).split("#")[-1]
+                    datatype_properties.append(prop_name)
+            
+            # Extract relationships
+            relationships = []
+            for s, p, o in ontology_graph.triples((None, RDFS.domain, None)):
+                if str(s).startswith("http://example.org/tourism#") and str(o).startswith("http://example.org/tourism#"):
+                    prop_name = str(s).split("#")[-1]
+                    domain_class = str(o).split("#")[-1]
+                    relationships.append(f"{prop_name} domain: {domain_class}")
+            
+            for s, p, o in ontology_graph.triples((None, RDFS.range, None)):
+                if str(s).startswith("http://example.org/tourism#") and str(o).startswith("http://example.org/tourism#"):
+                    prop_name = str(s).split("#")[-1]
+                    range_class = str(o).split("#")[-1]
+                    relationships.append(f"{prop_name} range: {range_class}")
+            
+            # If no classes found, try alternative extraction methods
+            if not classes:
+                # Try to find classes by looking for tourism: prefix in the graph
+                for s, p, o in ontology_graph.triples((None, None, None)):
+                    if str(s).startswith("http://example.org/tourism#") and str(s).split("#")[-1] not in classes:
+                        potential_class = str(s).split("#")[-1]
+                        # Check if it's likely a class (not a property)
+                        if not any(prop in potential_class.lower() for prop in ['property', 'has', 'is']):
+                            classes.append(potential_class)
+            
+            # If still no classes, use hardcoded fallback based on TTL file
+            if not classes:
+                classes = ["City", "Country", "Attraction", "CoastalCity", "CoastalAttraction", 
+                          "FamilyFriendlyAttraction", "NotFamilyFriendlyAttraction", 
+                          "CoastalFamilyDestination", "Contradiction"]
+            
+            if not object_properties:
+                object_properties = ["locatedIn", "inCountry"]
+            
+            if not datatype_properties:
+                datatype_properties = ["hasName", "hasRating", "hasEntryFeeAmount", "hasEntryFeeCurrency", 
+                                     "hasMinAge", "hasAmenity", "isCoastal", "population"]
+            
+            logger.info(f"Extracted ontology knowledge: {len(classes)} classes, {len(object_properties)} object props, {len(datatype_properties)} datatype props")
+            
+            return {
+                "classes": sorted(classes),
+                "object_properties": sorted(object_properties),
+                "datatype_properties": sorted(datatype_properties),
+                "relationships": relationships,
+                "namespace": "http://example.org/tourism#",
+                "prefix": "tourism"
+            }
+        except Exception as e:
+            logger.warning(f"Could not extract ontology knowledge: {e}")
+            return {
+                "classes": ["City", "Country", "Attraction", "CoastalCity", "CoastalAttraction", 
+                           "FamilyFriendlyAttraction", "NotFamilyFriendlyAttraction", 
+                           "CoastalFamilyDestination", "Contradiction"],
+                "object_properties": ["locatedIn", "inCountry"],
+                "datatype_properties": ["hasName", "hasRating", "hasEntryFeeAmount", "hasEntryFeeCurrency", 
+                                       "hasMinAge", "hasAmenity", "isCoastal", "population"],
+                "relationships": [],
+                "namespace": "http://example.org/tourism#",
+                "prefix": "tourism"
+            }
     
     def _setup_llm(self):
         """Setup LLM based on provider."""
@@ -102,10 +193,21 @@ class TourismLangGraphAgents:
         def parse_tourism_data(data: str) -> str:
             """Parse and normalize tourism data to RDF format."""
             try:
-                # Use LLM to parse and structure data
+                # Use LLM to parse and structure data with full ontology knowledge
+                ontology_info = self.ontology_knowledge
                 prompt = f"""
                 Parse the following tourism data and convert it to RDF Turtle format.
-                Use the tourism ontology with classes: City, CoastalCity, Attraction, etc.
+                
+                TOURISM ONTOLOGY KNOWLEDGE:
+                Classes: {', '.join(ontology_info['classes'])}
+                Object Properties: {', '.join(ontology_info['object_properties'])}
+                Datatype Properties: {', '.join(ontology_info['datatype_properties'])}
+                Relationships: {'; '.join(ontology_info['relationships'])}
+                Namespace: {ontology_info['namespace']}
+                Prefix: {ontology_info['prefix']}
+                
+                Use the tourism ontology classes and properties listed above.
+                Create proper RDF triples with correct subject-predicate-object relationships.
                 
                 Data: {data}
                 
@@ -143,8 +245,9 @@ class TourismLangGraphAgents:
             messages = state["messages"]
             last_message = messages[-1]
             
-            # Create system prompt for ingest agent
-            system_prompt = """
+            # Create system prompt for ingest agent with ontology knowledge
+            ontology_info = self.ontology_knowledge
+            system_prompt = f"""
             You are an Ingest Agent for a tourism knowledge graph system.
             Your role is to:
             1. Parse and normalize tourism data from various sources
@@ -152,11 +255,20 @@ class TourismLangGraphAgents:
             3. Validate data quality using SHACL shapes
             4. Ensure data follows the tourism domain model
             
+            TOURISM ONTOLOGY KNOWLEDGE:
+            Classes: {', '.join(ontology_info['classes'])}
+            Object Properties: {', '.join(ontology_info['object_properties'])}
+            Datatype Properties: {', '.join(ontology_info['datatype_properties'])}
+            Relationships: {'; '.join(ontology_info['relationships'])}
+            Namespace: {ontology_info['namespace']}
+            Prefix: {ontology_info['prefix']}
+            
             Available tools:
             - parse_tourism_data: Parse raw data to RDF
             - validate_rdf_data: Validate RDF using SHACL
             
             Always provide structured RDF output and validation results.
+            Use the ontology classes and properties listed above.
             """
             
             # Create prompt with context
