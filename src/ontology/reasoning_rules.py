@@ -48,76 +48,19 @@ class TourismReasoningEngine:
         self._define_python_rules()
     
     def _load_rules(self, rules_file: str):
-        """Load reasoning rules from Fuseki."""
+        """Load SWRL reasoning rules from Fuseki."""
         try:
             # Load rules into Fuseki first
             if not self.fuseki_client.load_reasoning_rules(rules_file):
                 raise RuntimeError(f"Failed to load reasoning rules into Fuseki: {rules_file}")
             
-            # Get rules data from Fuseki
-            rules_graph = self.fuseki_client.get_graph_data(self.fuseki_client.main_graph)
-            print(f"✅ Loaded reasoning rules from Fuseki (source: {rules_file})")
-            
-            # Extract SPARQL rules from the loaded graph
-            self._extract_sparql_rules(rules_graph)
+            print(f"✅ Loaded SWRL reasoning rules from Fuseki (source: {rules_file})")
+            print("ℹ️  Using SWRL-only reasoning for POC clarity")
             
         except Exception as e:
             print(f"❌ Error loading reasoning rules from {rules_file}: {e}")
             print("Using fallback Python rules...")
     
-    def _extract_sparql_rules(self, rules_graph: Graph):
-        """Extract SPARQL rules from the loaded rules graph."""
-        # Query for SPARQL rules
-        query = """
-        SELECT ?rule ?query ?action
-        WHERE {
-            ?rule rdf:type rules:SPARQLRule .
-            ?rule rules:query ?query .
-            ?rule rules:action ?action .
-        }
-        """
-        
-        for row in rules_graph.query(query):
-            rule_name = str(row.rule).split('#')[-1]
-            query_text = str(row.query)
-            action_text = str(row.action)
-            
-            # Create a rule function
-            def create_rule_func(query, action, name):
-                def rule_func(graph):
-                    return self._execute_sparql_rule(graph, query, action, name)
-                return rule_func
-            
-            rule_func = create_rule_func(query_text, action_text, rule_name)
-            rule_func.__name__ = rule_name
-            self.rules.append(rule_func)
-            logger.info(f"Loaded SPARQL rule: {rule_name}")
-    
-    def _execute_sparql_rule(self, graph: Graph, query: str, action: str, rule_name: str) -> List[Tuple]:
-        """Execute a SPARQL rule and return new facts."""
-        try:
-            # Execute the query to find matching patterns
-            results = list(graph.query(query))
-            
-            if not results:
-                return []
-            
-            # Execute the action to generate new facts
-            action_results = list(graph.query(action))
-            
-            new_facts = []
-            for result in action_results:
-                # Convert SPARQL result to RDF triple
-                if len(result) >= 3:
-                    subject, predicate, object = result[0], result[1], result[2]
-                    new_facts.append((subject, predicate, object))
-                    logger.info(f"Derived by {rule_name}: {subject} {predicate} {object}")
-            
-            return new_facts
-            
-        except Exception as e:
-            logger.error(f"Error executing SPARQL rule {rule_name}: {e}")
-            return []
     
     def _define_python_rules(self):
         """Define fallback Python rules for compatibility."""
@@ -238,28 +181,27 @@ class TourismReasoningEngine:
         return new_facts
     
     def _rule_contradiction_detection(self, graph: Graph) -> List[Tuple]:
-        """Rule: Detect contradictions (disjoint classes)"""
+        """Rule: Detect contradictions using SWRL rule resolution only"""
         contradictions = []
         
-        # Check for FamilyFriendlyAttraction and NotFamilyFriendlyAttraction contradiction
-        query = """
-        SELECT ?entity
-        WHERE {
-            ?entity rdf:type tourism:FamilyFriendlyAttraction .
-            ?entity rdf:type tourism:NotFamilyFriendlyAttraction .
-        }
-        """
+        # This method now relies on SWRL rules loaded from the TTL file
+        # The actual contradiction detection is handled by the SWRL engine
+        # We just collect any contradictions that were detected by SWRL rules
         
-        for row in graph.query(query):
-            entity = row.entity
+        # Check if any entities have been marked as contradictions by SWRL rules
+        from rdflib.namespace import RDF
+        TOURISM = Namespace("http://example.org/tourism#")
+        
+        # Look for entities marked as contradictions by SWRL rules
+        for entity, predicate, obj in graph.triples((None, RDF.type, TOURISM.Contradiction)):
             contradiction = {
-                "type": "DISJOINT_CLASS_VIOLATION",
+                "type": "SWRL_CONTRADICTION",
                 "entity": str(entity),
-                "conflicting_types": ["FamilyFriendlyAttraction", "NotFamilyFriendlyAttraction"],
-                "message": f"Entity {entity} cannot be both FamilyFriendly and NotFamilyFriendly"
+                "conflicting_types": ["Detected by SWRL rule"],
+                "message": f"Entity {entity} marked as contradiction by SWRL rule"
             }
             contradictions.append(contradiction)
-            logger.warning(f"Contradiction detected: {contradiction['message']}")
+            logger.warning(f"SWRL contradiction detected: {contradiction['message']}")
         
         return contradictions
     

@@ -93,78 +93,58 @@ class ReasonAgent(BaseAgent):
     
     def detect_contradictions(self) -> List[Dict[str, Any]]:
         """
-        Detect logical contradictions in the knowledge graph.
+        Detect logical contradictions using SWRL rule resolution only.
         
         Returns:
             List of contradiction analysis results
         """
-        contradictions = []
-        
-        # Check for disjoint class violations
-        query = """
-        SELECT ?entity ?type1 ?type2
-        WHERE {
-            ?entity rdf:type ?type1 .
-            ?entity rdf:type ?type2 .
-            ?type1 owl:disjointWith ?type2 .
-        }
-        """
-        
-        result = self.query_knowledge_graph(query)
-        
-        if result.get("success"):
-            bindings = result.get("results", {}).get("bindings", [])
+        try:
+            # Use the reasoning engine to detect contradictions via SWRL rules
+            from ..ontology.reasoning_rules import TourismReasoningEngine
+            from ..ontology.fuseki_client import FusekiClient
             
-            for binding in bindings:
-                entity = binding.get("entity", {}).get("value", "")
-                type1 = binding.get("type1", {}).get("value", "")
-                type2 = binding.get("type2", {}).get("value", "")
-                
-                contradictions.append({
-                    "entity": entity,
-                    "contradicting_types": [type1, type2],
-                    "reason": "Entity cannot be both types due to disjointness"
+            # Initialize reasoning engine
+            fuseki_client = FusekiClient()
+            reasoning_engine = TourismReasoningEngine(fuseki_client)
+            
+            # Get current knowledge graph
+            kg_data = self.get_knowledge_graph()
+            if not kg_data.get("success"):
+                logger.error("Failed to retrieve knowledge graph for contradiction detection")
+                return []
+            
+            # Convert to RDF graph for reasoning
+            from rdflib import Graph
+            graph = Graph()
+            
+            for triple in kg_data.get("triples", []):
+                try:
+                    graph.add(triple)
+                except Exception as e:
+                    logger.warning(f"Failed to add triple to graph: {e}")
+                    continue
+            
+            # Run SWRL reasoning to detect contradictions
+            reasoning_result = reasoning_engine.run_reasoning(graph)
+            contradictions = reasoning_result.get("contradictions", [])
+            
+            # Convert to expected format
+            formatted_contradictions = []
+            for contradiction in contradictions:
+                formatted_contradictions.append({
+                    "entity": contradiction.get("entity", "unknown"),
+                    "contradicting_types": contradiction.get("conflicting_types", []),
+                    "reason": contradiction.get("message", "SWRL rule detected contradiction"),
+                    "type": contradiction.get("type", "SWRL_CONTRADICTION")
                 })
-        
-        # Check for functional property violations
-        functional_violations = self._check_functional_properties()
-        contradictions.extend(functional_violations)
-        
-        logger.info(f"Found {len(contradictions)} contradictions")
-        return contradictions
+            
+            logger.info(f"Found {len(formatted_contradictions)} contradictions via SWRL rules")
+            return formatted_contradictions
+            
+        except Exception as e:
+            logger.error(f"Error in SWRL contradiction detection: {e}")
+            return []
     
-    def _check_functional_properties(self) -> List[Dict[str, Any]]:
-        """Check for functional property violations."""
-        violations = []
-        
-        # Check locatedIn functional property
-        query = """
-        SELECT ?attraction ?city1 ?city2
-        WHERE {
-            ?attraction tourism:locatedIn ?city1 .
-            ?attraction tourism:locatedIn ?city2 .
-            FILTER(?city1 != ?city2)
-        }
-        """
-        
-        result = self.query_knowledge_graph(query)
-        
-        if result.get("success"):
-            bindings = result.get("results", {}).get("bindings", [])
-            
-            for binding in bindings:
-                attraction = binding.get("attraction", {}).get("value", "")
-                city1 = binding.get("city1", {}).get("value", "")
-                city2 = binding.get("city2", {}).get("value", "")
-                
-                violations.append({
-                    "entity": attraction,
-                    "property": "tourism:locatedIn",
-                    "reason": f"Attraction is located in multiple cities: {city1}, {city2}",
-                    "violation_type": "functional_property"
-                })
-        
-        return violations
     
     def analyze_derived_facts(self) -> Dict[str, Any]:
         """

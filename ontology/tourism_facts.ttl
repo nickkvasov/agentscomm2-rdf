@@ -1,0 +1,45 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix tourism: <http://example.org/tourism#> .
+
+# Tourism Domain Facts
+# Sample data for testing SWRL reasoning and contradiction detection
+
+# Countries
+tourism:UAE rdf:type tourism:Country ;
+    tourism:hasName "United Arab Emirates" .
+
+# Cities
+tourism:Dubai rdf:type tourism:CoastalCity ;
+    tourism:hasName "Dubai" ;
+    tourism:isCoastal true ;
+    tourism:inCountry tourism:UAE .
+
+# Attractions
+tourism:DubaiAquarium rdf:type tourism:Attraction ;
+    tourism:hasName "Dubai Aquarium" ;
+    tourism:locatedIn tourism:Dubai ;
+    tourism:hasAmenity "Playground" ;
+    tourism:hasRating 4.6 ;
+    tourism:hasEntryFeeAmount 25.0 ;
+    tourism:hasEntryFeeCurrency "AED" .
+
+# Additional sample attractions for testing
+tourism:BurjKhalifa rdf:type tourism:Attraction ;
+    tourism:hasName "Burj Khalifa" ;
+    tourism:locatedIn tourism:Dubai ;
+    tourism:hasRating 4.8 ;
+    tourism:hasEntryFeeAmount 150.0 ;
+    tourism:hasEntryFeeCurrency "AED" ;
+    tourism:hasMinAge 12 .
+
+tourism:JumeirahBeach rdf:type tourism:Attraction ;
+    tourism:hasName "Jumeirah Beach" ;
+    tourism:locatedIn tourism:Dubai ;
+    tourism:hasAmenity "Beach" ;
+    tourism:hasAmenity "Playground" ;
+    tourism:hasRating 4.3 ;
+    tourism:hasEntryFeeAmount 0.0 ;
+    tourism:hasEntryFeeCurrency "AED" .

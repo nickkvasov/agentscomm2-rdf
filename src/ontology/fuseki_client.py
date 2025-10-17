@@ -82,6 +82,30 @@ class FusekiClient:
             logger.error(f"❌ Failed to load ontology: {e}")
             return False
     
+    def load_facts(self, facts_file: str) -> bool:
+        """
+        Load tourism facts into Fuseki.
+        
+        Args:
+            facts_file: Path to the facts file
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Read facts file
+            with open(facts_file, 'r') as f:
+                facts_data = f.read()
+            
+            # Load into main graph
+            self._load_data_to_graph(facts_data, self.main_graph, "turtle")
+            logger.info(f"✅ Loaded facts from {facts_file}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to load facts: {e}")
+            return False
+    
     def load_shacl_shapes(self, shapes_file: str) -> bool:
         """
         Load SHACL shapes into Fuseki.

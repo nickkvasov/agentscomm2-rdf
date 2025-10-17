@@ -42,6 +42,10 @@ tourism:FamilyFriendlyAttraction owl:disjointWith tourism:NotFamilyFriendlyAttra
 tourism:CoastalFamilyDestination rdf:type owl:Class ;
     rdfs:comment "A destination that combines a coastal city with a family-friendly attraction" .
 
+# Contradiction class for SWRL rule detection
+tourism:Contradiction rdf:type owl:Class ;
+    rdfs:comment "Represents entities that have contradictory properties as detected by SWRL rules" .
+
 # Object Properties
 tourism:locatedIn rdf:type owl:ObjectProperty ;
     rdfs:domain tourism:Attraction ;
@@ -131,19 +135,5 @@ msg:timestamp rdf:type owl:DatatypeProperty ;
     rdfs:range xsd:dateTime ;
     rdfs:comment "Timestamp of the intent" .
 
-# Sample Data
-tourism:Dubai rdf:type tourism:CoastalCity ;
-    tourism:hasName "Dubai" ;
-    tourism:isCoastal true ;
-    tourism:inCountry tourism:UAE .
-
-tourism:UAE rdf:type tourism:Country ;
-    tourism:hasName "United Arab Emirates" .
-
-tourism:DubaiAquarium rdf:type tourism:Attraction ;
-    tourism:hasName "Dubai Aquarium" ;
-    tourism:locatedIn tourism:Dubai ;
-    tourism:hasAmenity "Playground" ;
-    tourism:hasRating 4.6 ;
-    tourism:hasEntryFeeAmount 25.0 ;
-    tourism:hasEntryFeeCurrency "AED" .
+# Note: Sample facts are now in tourism_facts.ttl
+# This file contains only the ontology schema (classes, properties, constraints)

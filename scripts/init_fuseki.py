@@ -51,17 +51,29 @@ def load_ontology_files(fuseki_client: FusekiClient):
     script_dir = Path(__file__).parent
     ontology_dir = script_dir.parent / "ontology"
     
-    # Load ontology
+    # Load ontology (schema only)
     ontology_file = ontology_dir / "tourism_ontology.ttl"
     if ontology_file.exists():
-        print(f"📖 Loading ontology: {ontology_file}")
+        print(f"📖 Loading ontology schema: {ontology_file}")
         if fuseki_client.load_ontology(str(ontology_file)):
-            print("✅ Ontology loaded successfully")
+            print("✅ Ontology schema loaded successfully")
         else:
-            print("❌ Failed to load ontology")
+            print("❌ Failed to load ontology schema")
             return False
     else:
         print(f"⚠️  Ontology file not found: {ontology_file}")
+    
+    # Load facts (sample data)
+    facts_file = ontology_dir / "tourism_facts.ttl"
+    if facts_file.exists():
+        print(f"📊 Loading facts: {facts_file}")
+        if fuseki_client.load_facts(str(facts_file)):
+            print("✅ Facts loaded successfully")
+        else:
+            print("❌ Failed to load facts")
+            return False
+    else:
+        print(f"⚠️  Facts file not found: {facts_file}")
     
     # Load SHACL shapes
     shapes_file = ontology_dir / "tourism_shacl_shapes.ttl"

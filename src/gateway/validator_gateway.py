@@ -209,8 +209,37 @@ class ValidatorGateway:
                     )]
                 )
             
-            # Build merged view (Staging + Consensus + Main)
-            merged_graph = self._build_merged_view(staging_graph, request.session_id)
+            # Build agent-specific merged view (Agent Staging + Consensus + Main)
+            merged_graph = self._build_agent_merged_view(
+                agent_id=request.agent_id,
+                staging_graph=staging_graph, 
+                session_id=request.session_id
+            )
+            
+            # Run agent-level consistency validation
+            agent_consistency_result = self._validate_agent_consistency(
+                agent_id=request.agent_id,
+                staging_graph=staging_graph,
+                merged_graph=merged_graph
+            )
+            
+            if not agent_consistency_result["is_consistent"]:
+                errors = []
+                for issue in agent_consistency_result["consistency_issues"]:
+                    errors.append(ValidationError(
+                        error_type=ValidationErrorType.LOGIC_CONTRADICTION,
+                        message=f"Agent {request.agent_id} consistency violation: {issue.get('message', 'Consistency violation')}",
+                        focus_node=issue.get("entity"),
+                        details=issue
+                    ))
+                
+                self._update_metrics(success=False, error_type="AGENT_CONSISTENCY_VIOLATION")
+                return ValidationResponse(
+                    success=False,
+                    message=f"Agent {request.agent_id} consistency validation failed",
+                    errors=errors,
+                    agent_id=request.agent_id
+                )
             
             # Run SHACL validation
             shacl_result = self.shacl_shapes.get_validation_report(merged_graph)
@@ -220,7 +249,7 @@ class ValidatorGateway:
                 for violation in shacl_result["violations"]:
                     errors.append(ValidationError(
                         error_type=ValidationErrorType.SHACL_VIOLATION,
-                        message=violation.get("message", "SHACL validation failed"),
+                        message=f"Agent {request.agent_id} SHACL violation: {violation.get('message', 'SHACL validation failed')}",
                         focus_node=violation.get("focus_node"),
                         property_path=violation.get("path"),
                         severity=violation.get("severity", "error"),
@@ -230,8 +259,9 @@ class ValidatorGateway:
                 self._update_metrics(success=False, error_type="SHACL_VIOLATION")
                 return ValidationResponse(
                     success=False,
-                    message="SHACL validation failed",
-                    errors=errors
+                    message=f"Agent {request.agent_id} SHACL validation failed",
+                    errors=errors,
+                    agent_id=request.agent_id
                 )
             
             # Run forward-chaining reasoning
@@ -243,7 +273,7 @@ class ValidatorGateway:
                 for contradiction in reasoning_result["contradictions"]:
                     errors.append(ValidationError(
                         error_type=ValidationErrorType.LOGIC_CONTRADICTION,
-                        message=contradiction.get("message", "Logic contradiction detected"),
+                        message=f"Agent {request.agent_id} contradiction: {contradiction.get('message', 'Logic contradiction detected')}",
                         focus_node=contradiction.get("entity"),
                         details=contradiction
                     ))
@@ -251,9 +281,10 @@ class ValidatorGateway:
                 self._update_metrics(success=False, error_type="LOGIC_CONTRADICTION")
                 return ValidationResponse(
                     success=False,
-                    message="Logic contradiction detected",
+                    message=f"Agent {request.agent_id} logic contradiction detected",
                     errors=errors,
-                    contradictions=reasoning_result["contradictions"]
+                    contradictions=reasoning_result["contradictions"],
+                    agent_id=request.agent_id
                 )
             
             # Validate consistency
@@ -264,7 +295,7 @@ class ValidatorGateway:
                 for issue in consistency_result["consistency_issues"]:
                     errors.append(ValidationError(
                         error_type=ValidationErrorType.LOGIC_CONTRADICTION,
-                        message=issue.get("message", "Consistency violation"),
+                        message=f"Agent {request.agent_id} consistency violation: {issue.get('message', 'Consistency violation')}",
                         focus_node=issue.get("entity"),
                         details=issue
                     ))
@@ -272,8 +303,9 @@ class ValidatorGateway:
                 self._update_metrics(success=False, error_type="LOGIC_CONTRADICTION")
                 return ValidationResponse(
                     success=False,
-                    message="Consistency validation failed",
-                    errors=errors
+                    message=f"Agent {request.agent_id} consistency validation failed",
+                    errors=errors,
+                    agent_id=request.agent_id
                 )
             
             # Success - prepare response
@@ -287,18 +319,20 @@ class ValidatorGateway:
             
             return ValidationResponse(
                 success=True,
-                message="Validation successful",
+                message=f"Agent {request.agent_id} validation successful",
                 derived_facts=self._format_derived_facts(reasoning_result["derived_facts"]),
                 reasoning_iterations=reasoning_result["iterations"],
-                processing_time_ms=processing_time
+                processing_time_ms=processing_time,
+                agent_id=request.agent_id
             )
             
         except Exception as e:
-            logger.error(f"Validation error: {e}")
-            self._update_metrics(success=False, error_type="SYSTEM_ERROR")
+            logger.error(f"Agent {request.agent_id} validation error: {e}")
+            self._update_metrics(success=False, error_type="SYSTEM_ERROR", agent_id=request.agent_id)
             return ValidationResponse(
                 success=False,
-                message=f"System error: {str(e)}",
+                message=f"Agent {request.agent_id} system error: {str(e)}",
+                agent_id=request.agent_id,
                 errors=[ValidationError(
                     error_type=ValidationErrorType.SHACL_VIOLATION,
                     message="Internal system error"
@@ -348,7 +382,32 @@ class ValidatorGateway:
             consensus_graph_uri = f"http://example.org/consensus/{request.session_id}"
             self._commit_to_consensus(staging_data, consensus_graph_uri)
             
-            # Clear staging
+            # CRITICAL: Check consensus/main graph consistency before final commit
+            consensus_consistency_result = self._validate_consensus_main_consistency(
+                session_id=request.session_id,
+                consensus_graph_uri=consensus_graph_uri
+            )
+            
+            if not consensus_consistency_result["is_consistent"]:
+                # Rollback consensus commit if consistency check fails
+                self._rollback_consensus_commit(consensus_graph_uri)
+                
+                errors = []
+                for issue in consensus_consistency_result["consistency_issues"]:
+                    errors.append(ValidationError(
+                        error_type=ValidationErrorType.LOGIC_CONTRADICTION,
+                        message=f"Consensus/Main consistency violation: {issue.get('message', 'Consistency violation')}",
+                        focus_node=issue.get("entity"),
+                        details=issue
+                    ))
+                
+                return ValidationResponse(
+                    success=False,
+                    message="Consensus/Main graph consistency validation failed",
+                    errors=errors
+                )
+            
+            # Clear staging only after successful consistency check
             self._clear_staging(request.staging_graph)
             
             # Create message notification
@@ -356,7 +415,7 @@ class ValidatorGateway:
             
             return ValidationResponse(
                 success=True,
-                message="Data committed successfully",
+                message="Data committed successfully with consensus/main consistency validation",
                 derived_facts=validation_result.derived_facts
             )
             
@@ -414,6 +473,354 @@ class ValidatorGateway:
         merged += staging_graph
         
         return merged
+    
+    def _build_agent_merged_view(self, agent_id: str, staging_graph: Graph, session_id: str) -> Graph:
+        """Build agent-specific merged view: Agent Staging + Consensus + Main."""
+        merged = Graph()
+        
+        # Add main graph (read-only)
+        main_data = self._get_main_data()
+        if main_data:
+            merged += main_data
+        
+        # Add consensus graph for session
+        consensus_data = self._get_consensus_data(session_id)
+        if consensus_data:
+            merged += consensus_data
+        
+        # Add agent's staging data
+        merged += staging_graph
+        
+        logger.info(f"Built merged view for agent {agent_id}: {len(merged)} triples")
+        return merged
+    
+    def _validate_agent_consistency(self, agent_id: str, staging_graph: Graph, merged_graph: Graph) -> Dict[str, Any]:
+        """
+        Validate agent-specific consistency against consensus and main graphs.
+        
+        Args:
+            agent_id: ID of the agent
+            staging_graph: Agent's staging data
+            merged_graph: Combined view (staging + consensus + main)
+            
+        Returns:
+            Consistency validation result
+        """
+        logger.info(f"Validating agent {agent_id} consistency")
+        
+        consistency_issues = []
+        
+        # Check for conflicts with existing consensus data
+        consensus_conflicts = self._check_consensus_conflicts(agent_id, staging_graph, merged_graph)
+        consistency_issues.extend(consensus_conflicts)
+        
+        # Check for conflicts with main graph data
+        main_conflicts = self._check_main_graph_conflicts(agent_id, staging_graph, merged_graph)
+        consistency_issues.extend(main_conflicts)
+        
+        # Check for agent-specific contradictions
+        agent_contradictions = self._check_agent_contradictions(agent_id, staging_graph, merged_graph)
+        consistency_issues.extend(agent_contradictions)
+        
+        return {
+            "is_consistent": len(consistency_issues) == 0,
+            "consistency_issues": consistency_issues,
+            "agent_id": agent_id,
+            "total_issues": len(consistency_issues)
+        }
+    
+    def _check_consensus_conflicts(self, agent_id: str, staging_graph: Graph, merged_graph: Graph) -> List[Dict[str, Any]]:
+        """Check for conflicts between agent staging and consensus data."""
+        conflicts = []
+        
+        # Check for conflicting ratings
+        rating_conflicts = self._check_rating_conflicts(agent_id, staging_graph, merged_graph)
+        conflicts.extend(rating_conflicts)
+        
+        # Check for conflicting amenities
+        amenity_conflicts = self._check_amenity_conflicts(agent_id, staging_graph, merged_graph)
+        conflicts.extend(amenity_conflicts)
+        
+        return conflicts
+    
+    def _check_main_graph_conflicts(self, agent_id: str, staging_graph: Graph, merged_graph: Graph) -> List[Dict[str, Any]]:
+        """Check for conflicts between agent staging and main graph data."""
+        conflicts = []
+        
+        # Check for conflicting class assignments
+        class_conflicts = self._check_class_conflicts(agent_id, staging_graph, merged_graph)
+        conflicts.extend(class_conflicts)
+        
+        return conflicts
+    
+    def _check_agent_contradictions(self, agent_id: str, staging_graph: Graph, merged_graph: Graph) -> List[Dict[str, Any]]:
+        """Check for contradictions within agent's own data."""
+        contradictions = []
+        
+        # Check for self-contradictory facts in agent's staging
+        self_contradictions = self._check_self_contradictions(agent_id, staging_graph)
+        contradictions.extend(self_contradictions)
+        
+        return contradictions
+    
+    def _check_rating_conflicts(self, agent_id: str, staging_graph: Graph, merged_graph: Graph) -> List[Dict[str, Any]]:
+        """Check for conflicting ratings between agent and consensus."""
+        conflicts = []
+        
+        # Find entities with ratings in both staging and consensus
+        query = """
+        SELECT ?entity ?staging_rating ?consensus_rating
+        WHERE {
+            ?entity tourism:hasRating ?staging_rating .
+            ?entity tourism:hasRating ?consensus_rating .
+            FILTER(?staging_rating != ?consensus_rating)
+        }
+        """
+        
+        for row in merged_graph.query(query):
+            entity = str(row.entity)
+            staging_rating = float(row.staging_rating)
+            consensus_rating = float(row.consensus_rating)
+            
+            # Only flag significant conflicts (difference > 1.0)
+            if abs(staging_rating - consensus_rating) > 1.0:
+                conflicts.append({
+                    "type": "RATING_CONFLICT",
+                    "entity": entity,
+                    "agent_id": agent_id,
+                    "staging_rating": staging_rating,
+                    "consensus_rating": consensus_rating,
+                    "message": f"Agent {agent_id} rating {staging_rating} conflicts with consensus rating {consensus_rating} for {entity}"
+                })
+        
+        return conflicts
+    
+    def _check_amenity_conflicts(self, agent_id: str, staging_graph: Graph, merged_graph: Graph) -> List[Dict[str, Any]]:
+        """Check for conflicting amenities between agent and consensus."""
+        conflicts = []
+        
+        # This would check for contradictory amenities (e.g., "FamilyFriendly" vs "NotFamilyFriendly")
+        # Implementation depends on specific business rules
+        
+        return conflicts
+    
+    def _check_class_conflicts(self, agent_id: str, staging_graph: Graph, merged_graph: Graph) -> List[Dict[str, Any]]:
+        """Check for conflicting class assignments."""
+        conflicts = []
+        
+        # Check for disjoint class violations
+        query = """
+        SELECT ?entity ?class1 ?class2
+        WHERE {
+            ?entity rdf:type ?class1 .
+            ?entity rdf:type ?class2 .
+            ?class1 owl:disjointWith ?class2 .
+        }
+        """
+        
+        for row in merged_graph.query(query):
+            entity = str(row.entity)
+            class1 = str(row.class1)
+            class2 = str(row.class2)
+            
+            conflicts.append({
+                "type": "DISJOINT_CLASS_VIOLATION",
+                "entity": entity,
+                "agent_id": agent_id,
+                "conflicting_classes": [class1, class2],
+                "message": f"Agent {agent_id} assigned {entity} to disjoint classes {class1} and {class2}"
+            })
+        
+        return conflicts
+    
+    def _check_self_contradictions(self, agent_id: str, staging_graph: Graph) -> List[Dict[str, Any]]:
+        """Check for contradictions within agent's own staging data."""
+        contradictions = []
+        
+        # Check for entities marked as contradictions by SWRL rules
+        for entity, predicate, obj in staging_graph.triples((None, RDF.type, TOURISM.Contradiction)):
+            contradictions.append({
+                "type": "SELF_CONTRADICTION",
+                "entity": str(entity),
+                "agent_id": agent_id,
+                "message": f"Agent {agent_id} created contradictory entity {entity}"
+            })
+        
+        return contradictions
+    
+    def _validate_consensus_main_consistency(self, session_id: str, consensus_graph_uri: str) -> Dict[str, Any]:
+        """
+        Validate consistency between consensus graph and main graph before final commit.
+        
+        This is the CRITICAL step that was missing - checking if consensus data
+        is consistent with the main graph before committing to main.
+        
+        Args:
+            session_id: Session ID
+            consensus_graph_uri: URI of the consensus graph
+            
+        Returns:
+            Consistency validation result
+        """
+        logger.info(f"Validating consensus/main consistency for session {session_id}")
+        
+        try:
+            # Get consensus data
+            consensus_data = self._get_consensus_data(session_id)
+            if not consensus_data:
+                return {
+                    "is_consistent": True,
+                    "consistency_issues": [],
+                    "message": "No consensus data to validate"
+                }
+            
+            # Get main graph data
+            main_data = self._get_main_data()
+            if not main_data:
+                return {
+                    "is_consistent": True,
+                    "consistency_issues": [],
+                    "message": "No main graph data to validate against"
+                }
+            
+            # Build merged view: Consensus + Main
+            merged_graph = Graph()
+            merged_graph += main_data
+            merged_graph += consensus_data
+            
+            logger.info(f"Built consensus/main merged view: {len(merged_graph)} triples")
+            
+            # Run comprehensive consistency validation
+            consistency_issues = []
+            
+            # 1. Check for conflicts between consensus and main
+            consensus_main_conflicts = self._check_consensus_main_conflicts(consensus_data, main_data, merged_graph)
+            consistency_issues.extend(consensus_main_conflicts)
+            
+            # 2. Run SWRL reasoning on merged graph
+            reasoning_result = self.reasoning_engine.run_reasoning(merged_graph)
+            
+            # 3. Check for contradictions in merged graph
+            if reasoning_result["contradictions"]:
+                for contradiction in reasoning_result["contradictions"]:
+                    consistency_issues.append({
+                        "type": "CONSENSUS_MAIN_CONTRADICTION",
+                        "entity": contradiction.get("entity"),
+                        "message": f"Consensus/Main contradiction: {contradiction.get('message', 'Logical contradiction')}",
+                        "details": contradiction
+                    })
+            
+            # 4. Run final consistency validation
+            final_consistency = self.reasoning_engine.validate_consistency(merged_graph)
+            if not final_consistency["is_consistent"]:
+                for issue in final_consistency["consistency_issues"]:
+                    consistency_issues.append({
+                        "type": "FINAL_CONSISTENCY_VIOLATION",
+                        "entity": issue.get("entity"),
+                        "message": f"Final consistency violation: {issue.get('message', 'Consistency violation')}",
+                        "details": issue
+                    })
+            
+            return {
+                "is_consistent": len(consistency_issues) == 0,
+                "consistency_issues": consistency_issues,
+                "session_id": session_id,
+                "total_issues": len(consistency_issues)
+            }
+            
+        except Exception as e:
+            logger.error(f"Error validating consensus/main consistency: {e}")
+            return {
+                "is_consistent": False,
+                "consistency_issues": [{
+                    "type": "VALIDATION_ERROR",
+                    "message": f"Consensus/Main validation error: {str(e)}"
+                }],
+                "session_id": session_id,
+                "total_issues": 1
+            }
+    
+    def _check_consensus_main_conflicts(self, consensus_data: Graph, main_data: Graph, merged_graph: Graph) -> List[Dict[str, Any]]:
+        """Check for conflicts between consensus and main graph data."""
+        conflicts = []
+        
+        # Check for conflicting ratings between consensus and main
+        rating_conflicts = self._check_consensus_main_rating_conflicts(consensus_data, main_data, merged_graph)
+        conflicts.extend(rating_conflicts)
+        
+        # Check for conflicting class assignments
+        class_conflicts = self._check_consensus_main_class_conflicts(consensus_data, main_data, merged_graph)
+        conflicts.extend(class_conflicts)
+        
+        return conflicts
+    
+    def _check_consensus_main_rating_conflicts(self, consensus_data: Graph, main_data: Graph, merged_graph: Graph) -> List[Dict[str, Any]]:
+        """Check for rating conflicts between consensus and main graphs."""
+        conflicts = []
+        
+        # Find entities with ratings in both consensus and main
+        query = """
+        SELECT ?entity ?consensus_rating ?main_rating
+        WHERE {
+            ?entity tourism:hasRating ?consensus_rating .
+            ?entity tourism:hasRating ?main_rating .
+            FILTER(?consensus_rating != ?main_rating)
+        }
+        """
+        
+        for row in merged_graph.query(query):
+            entity = str(row.entity)
+            consensus_rating = float(row.consensus_rating)
+            main_rating = float(row.main_rating)
+            
+            # Flag significant conflicts (difference > 1.0)
+            if abs(consensus_rating - main_rating) > 1.0:
+                conflicts.append({
+                    "type": "CONSENSUS_MAIN_RATING_CONFLICT",
+                    "entity": entity,
+                    "consensus_rating": consensus_rating,
+                    "main_rating": main_rating,
+                    "message": f"Consensus rating {consensus_rating} conflicts with main graph rating {main_rating} for {entity}"
+                })
+        
+        return conflicts
+    
+    def _check_consensus_main_class_conflicts(self, consensus_data: Graph, main_data: Graph, merged_graph: Graph) -> List[Dict[str, Any]]:
+        """Check for class conflicts between consensus and main graphs."""
+        conflicts = []
+        
+        # Check for disjoint class violations in merged graph
+        query = """
+        SELECT ?entity ?class1 ?class2
+        WHERE {
+            ?entity rdf:type ?class1 .
+            ?entity rdf:type ?class2 .
+            ?class1 owl:disjointWith ?class2 .
+        }
+        """
+        
+        for row in merged_graph.query(query):
+            entity = str(row.entity)
+            class1 = str(row.class1)
+            class2 = str(row.class2)
+            
+            conflicts.append({
+                "type": "CONSENSUS_MAIN_CLASS_CONFLICT",
+                "entity": entity,
+                "conflicting_classes": [class1, class2],
+                "message": f"Consensus/Main merged graph has disjoint class violation: {entity} is both {class1} and {class2}"
+            })
+        
+        return conflicts
+    
+    def _rollback_consensus_commit(self, consensus_graph_uri: str):
+        """Rollback consensus commit if consistency validation fails."""
+        try:
+            # Clear the consensus graph
+            self._clear_staging(consensus_graph_uri)
+            logger.info(f"Rolled back consensus commit for {consensus_graph_uri}")
+        except Exception as e:
+            logger.error(f"Failed to rollback consensus commit: {e}")
     
     def _get_main_data(self) -> Optional[Graph]:
         """Get main graph data."""
