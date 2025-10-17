@@ -45,52 +45,36 @@ Instead of agents working in isolation, they all contribute to and read from a *
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │   Agent A   │    │   Agent B   │    │   Agent C   │
 │ (Hotels)    │    │(Restaurants)│    │(Attractions)│
-│             │    │             │    │             │
-│ • LLM       │    │ • LLM       │    │ • LLM       │
-│ • Domain    │    │ • Domain    │    │ • Domain    │
-│   Knowledge │    │   Knowledge │    │   Knowledge │
 └──────┬──────┘    └──────┬──────┘    └──────┬──────┘
        │                  │                  │
+       │  Each agent has domain knowledge   │
+       │  and creates proposed changes       │
        │                  │                  │
        ▼                  ▼                  ▼
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │   STAGING   │    │   STAGING   │    │   STAGING   │
 │   GRAPH A   │    │   GRAPH B   │    │   GRAPH C   │
 │             │    │             │    │             │
-│ • Agent's   │    │ • Agent's   │    │ • Agent's   │
-│   proposed  │    │   proposed  │    │   proposed  │
-│   changes   │    │   changes   │    │   changes   │
 │ • Isolated  │    │ • Isolated  │    │ • Isolated  │
-│   workspace │    │   workspace │    │   workspace │
+│ • Proposed  │    │ • Proposed  │    │ • Proposed  │
+│   changes   │    │   changes   │    │   changes   │
 └──────┬──────┘    └──────┬──────┘    └──────┬──────┘
        │                  │                  │
-       │                  │                  │
-       │  ┌─────────────────────────────────────┐
-       │  │        VALIDATOR GATEWAY            │
-       │  │                                     │
-       │  │ • Agent-level consistency checking  │
-       │  │ • Multi-layer validation            │
-       │  │ • Rollback mechanism                │
-       │  └─────────────────────────────────────┘
-       │                  │                  │
+       │  Validator Gateway validates each   │
+       │  staging graph against consensus   │
+       │  and main graphs                   │
        │                  │                  │
        ▼                  ▼                  ▼
 ┌─────────────────────────────────────────────────────────┐
 │                CONSENSUS GRAPH                          │
 │                                                         │
-│ • Validated agent contributions                        │
+│ • Validated changes from all agents                   │
 │ • Agreed-upon knowledge                                │
-│ • Pre-commit validation                               │
-│ • Collaborative building                              │
+│ • Pre-commit state                                     │
 └─────────────────────┬───────────────────────────────────┘
                       │
-                      │  ┌─────────────────────────────────┐
-                      │  │        VALIDATOR GATEWAY        │
-                      │  │                                 │
-                      │  │ • Consensus/main consistency    │
-                      │  │ • Final validation              │
-                      │  │ • Rollback if conflicts         │
-                      │  └─────────────────────────────────┘
+                      │  Validator Gateway validates
+                      │  consensus against main graph
                       │
                       ▼
 ┌─────────────────────────────────────────────────────────┐
@@ -100,58 +84,197 @@ Instead of agents working in isolation, they all contribute to and read from a *
 │ • All validated facts                                  │
 │ • Complete relationships                                │
 │ • Reasoning results                                     │
-│ • Final authoritative data                             │
 └─────────────────────────────────────────────────────────┘
 
-📊 GRAPH LIFECYCLE:
+📊 SIMPLIFIED DATA FLOW:
 ======================================================================
-1. STAGING: Agents create isolated workspaces with proposed changes
-2. VALIDATION: Staging graphs are validated against consensus + main
-3. CONSENSUS: Validated changes accumulate in consensus graph
-4. INTEGRATION: Consensus graph is validated against main graph
-5. COMMIT: Validated consensus data moves to main graph
-6. REASONING: SWRL rules derive new insights in main graph
-7. PUBLICATION: Updated knowledge is available to all agents
+1. Agents create staging graphs with proposed changes
+2. Validator Gateway validates staging graphs
+3. Valid changes move to consensus graph
+4. Validator Gateway validates consensus against main
+5. Valid consensus data commits to main graph
+6. All agents see updated knowledge
 ```
 
 ### **Architecture Components Explained**
 
 #### **🤖 LLM Agents with Domain Knowledge**
-- **Dynamic Ontology Access**: Each agent has comprehensive access to tourism domain knowledge
-- **Precise Classification**: Agents use correct domain classes and properties
-- **Context-Aware Processing**: Agents understand tourism domain relationships and constraints
 
-#### **🔍 Validator Gateway (Central Control)**
-The Validator Gateway is the **central orchestrator** that ensures data quality and consistency:
+**What they do:**
+- **Process Raw Data**: Take natural language input like "Dubai Aquarium is great for families"
+- **Apply Domain Knowledge**: Use tourism ontology (9 classes, 10 properties) to understand context
+- **Generate Structured Facts**: Create precise RDF triples like `tourism:DubaiAquarium rdf:type tourism:FamilyFriendlyAttraction`
+- **Propose Changes**: Add new facts to their staging graph for validation
 
-**Agent-Level Validation:**
-- **Staging Isolation**: Each agent's proposed changes are validated in isolation
-- **Consensus Integration**: Agent changes are validated against existing consensus data
-- **Main Graph Integration**: Agent changes are validated against the main knowledge base
-- **Contradiction Detection**: Detects conflicts between agent contributions
+**How they work:**
+- Each agent has access to the complete tourism domain schema
+- Agents understand relationships between classes (e.g., CoastalCity → City)
+- Agents use correct properties (hasRating, locatedIn, hasAmenity)
+- Agents create domain-compliant RDF that passes validation
 
-**Consensus/Main Validation:**
-- **Pre-Commit Validation**: Consensus graph is validated against main graph before commit
-- **Rollback Mechanism**: Failed validations trigger automatic rollback
-- **Consistency Assurance**: Ensures consensus and main graphs remain consistent
+#### **📊 Staging Graphs (Agent Workspaces)**
 
-#### **📊 Staging Graphs (Agent Isolation)**
-- **Isolated Processing**: Each agent has its own staging graph for proposed changes
-- **Safe Experimentation**: Agents can test changes without affecting others
-- **Validation Testing**: Proposed changes are validated before moving to consensus
-- **Conflict Prevention**: Isolated validation prevents agent conflicts
+**What they are:**
+- **Private Workspaces**: Each agent has its own isolated staging graph
+- **Proposed Changes**: Contains facts the agent wants to add to the knowledge base
+- **Safe Testing**: Agents can experiment without affecting others
+
+**Example Staging Graph (Agent A):**
+```turtle
+# Agent A's proposed hotel facts
+tourism:MarinaPlaza rdf:type tourism:Hotel .
+tourism:MarinaPlaza tourism:hasName "Marina Plaza" .
+tourism:MarinaPlaza tourism:hasRating 4.2 .
+tourism:MarinaPlaza tourism:locatedIn tourism:Dubai .
+tourism:MarinaPlaza tourism:hasAmenity "Pool" .
+```
+
+**Lifecycle:**
+1. **Creation**: Agent starts with empty staging graph
+2. **Population**: Agent adds proposed facts
+3. **Validation**: Staging graph is checked against consensus + main
+4. **Decision**: Valid facts move to consensus, invalid ones are rejected
+5. **Cleanup**: Staging graph is cleared for next iteration
 
 #### **🤝 Consensus Graph (Agreed Knowledge)**
-- **Validated Contributions**: Contains agent contributions that passed validation
-- **Pre-Commit State**: Intermediate state before final commit to main graph
-- **Consistency Checking**: Validated against main graph for final consistency
-- **Collaborative Building**: Represents agreed-upon knowledge from all agents
+
+**What it is:**
+- **Validated Contributions**: Contains facts from all agents that passed validation
+- **Pre-Commit State**: Intermediate storage before final commit to main graph
+- **Collaborative Building**: Represents agreed-upon knowledge from multiple agents
+
+**Example Consensus Graph:**
+```turtle
+# Validated facts from multiple agents
+tourism:MarinaPlaza rdf:type tourism:Hotel .
+tourism:MarinaPlaza tourism:hasName "Marina Plaza" .
+tourism:MarinaPlaza tourism:hasRating 4.2 .
+tourism:MarinaPlaza tourism:locatedIn tourism:Dubai .
+tourism:MarinaPlaza tourism:hasAmenity "Pool" .
+
+tourism:CoastalBistro rdf:type tourism:Restaurant .
+tourism:CoastalBistro tourism:hasName "Coastal Bistro" .
+tourism:CoastalBistro tourism:hasRating 4.5 .
+tourism:CoastalBistro tourism:locatedIn tourism:Dubai .
+
+# Derived facts from reasoning
+tourism:MarinaPlaza rdf:type tourism:FamilyFriendlyHotel .
+tourism:CoastalBistro rdf:type tourism:CoastalRestaurant .
+```
+
+**Lifecycle:**
+1. **Accumulation**: Valid facts from multiple agents accumulate
+2. **Integration**: Facts are integrated with existing consensus data
+3. **Validation**: Consensus graph is checked against main graph
+4. **Decision**: Valid consensus commits to main, invalid consensus rolls back
+5. **Commit**: Validated facts move to main graph
 
 #### **🏛️ Main Graph (Production Knowledge)**
+
+**What it is:**
 - **Authoritative Data**: The final, production knowledge base
-- **Complete Relationships**: All validated facts and relationships
-- **Reasoning Results**: Includes derived facts from SWRL reasoning
+- **Complete Relationships**: All validated facts and their relationships
+- **Reasoning Results**: Includes derived facts from SWRL reasoning rules
 - **Agent Access**: All agents read from and contribute to this graph
+
+**Example Main Graph:**
+```turtle
+# Complete production knowledge base
+tourism:MarinaPlaza rdf:type tourism:Hotel .
+tourism:MarinaPlaza tourism:hasName "Marina Plaza" .
+tourism:MarinaPlaza tourism:hasRating 4.2 .
+tourism:MarinaPlaza tourism:locatedIn tourism:Dubai .
+tourism:MarinaPlaza tourism:hasAmenity "Pool" .
+tourism:MarinaPlaza rdf:type tourism:FamilyFriendlyHotel .
+
+tourism:CoastalBistro rdf:type tourism:Restaurant .
+tourism:CoastalBistro tourism:hasName "Coastal Bistro" .
+tourism:CoastalBistro tourism:hasRating 4.5 .
+tourism:CoastalBistro tourism:locatedIn tourism:Dubai .
+tourism:CoastalBistro rdf:type tourism:CoastalRestaurant .
+
+# All existing knowledge
+tourism:Dubai rdf:type tourism:CoastalCity .
+tourism:DubaiAquarium rdf:type tourism:Attraction .
+tourism:DubaiAquarium tourism:locatedIn tourism:Dubai .
+# ... (all other validated facts)
+```
+
+**Lifecycle:**
+1. **Acceptance**: Validated consensus data is accepted
+2. **Integration**: New data is integrated with existing main graph
+3. **Reasoning**: SWRL rules are applied to derive new insights
+4. **Validation**: Final validation ensures no contradictions
+5. **Publication**: Updated knowledge is available to all agents
+
+#### **🔍 Validator Gateway (Central Control)**
+
+**What it does:**
+- **Staging Validation**: Checks each agent's proposed changes against existing data
+- **Consensus Validation**: Ensures consensus graph is consistent with main graph
+- **Quality Assurance**: Prevents invalid or contradictory data from entering the system
+- **Rollback Protection**: Automatically rolls back failed changes
+
+**How it works:**
+1. **Agent-Level Validation**: Each staging graph is validated against consensus + main
+2. **Consensus-Level Validation**: Consensus graph is validated against main before commit
+3. **Multi-Layer Checks**: SHACL validation + SWRL reasoning + consistency checking
+4. **Automatic Rollback**: Failed validations trigger automatic rollback
+
+### **🔄 How Data Flows Through the System**
+
+#### **Step 1: Agent Processing**
+```
+Raw Input: "Dubai Aquarium is great for families"
+         ↓
+Agent with Domain Knowledge:
+- Understands tourism ontology
+- Knows about Attraction, FamilyFriendlyAttraction classes
+- Knows about hasAmenity, locatedIn properties
+         ↓
+Staging Graph: Agent's proposed facts
+tourism:DubaiAquarium rdf:type tourism:Attraction .
+tourism:DubaiAquarium tourism:hasAmenity "Playground" .
+tourism:DubaiAquarium tourism:locatedIn tourism:Dubai .
+```
+
+#### **Step 2: Staging Validation**
+```
+Staging Graph → Validator Gateway
+- Check against consensus graph (no conflicts?)
+- Check against main graph (consistent?)
+- Validate SHACL shapes (data quality?)
+- Run SWRL reasoning (contradictions?)
+         ↓
+Result: ✅ Valid or ❌ Invalid
+```
+
+#### **Step 3: Consensus Integration**
+```
+Valid Staging → Consensus Graph
+- Add validated facts to consensus
+- Integrate with existing consensus data
+- Prepare for final validation
+```
+
+#### **Step 4: Consensus Validation**
+```
+Consensus Graph → Validator Gateway
+- Check consensus against main graph
+- Ensure no conflicts with production data
+- Final validation before commit
+         ↓
+Result: ✅ Commit to main or ❌ Rollback
+```
+
+#### **Step 5: Main Graph Update**
+```
+Valid Consensus → Main Graph
+- Add validated facts to production
+- Apply SWRL reasoning rules
+- Derive new insights (e.g., FamilyFriendlyAttraction)
+- Make knowledge available to all agents
+```
 
 ### **Key Benefits**
 
