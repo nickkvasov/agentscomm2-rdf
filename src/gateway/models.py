@@ -109,3 +109,42 @@ class ProvenanceData(BaseModel):
     rule_version: Optional[str] = Field(None, description="Version of the reasoning rule")
     fact_type: str = Field(..., description="Type of fact (asserted or derived)")
     graph_uri: str = Field(..., description="Graph where the fact is stored")
+
+
+class GatewayFeatureFlags(BaseModel):
+    """Configuration switches that enable/disable validation layers."""
+
+    enable_agent_consistency: bool = Field(
+        default=True,
+        description="Run intra-agent consistency checks before SHACL validation.",
+    )
+    enable_shacl: bool = Field(
+        default=True,
+        description="Evaluate payloads against SHACL shapes.",
+    )
+    enable_reasoning: bool = Field(
+        default=True,
+        description="Execute forward-chaining reasoning and contradiction detection.",
+    )
+    enable_consensus_checks: bool = Field(
+        default=True,
+        description="Validate consensus/main reconciliation before commits.",
+    )
+
+
+class EvaluationScenarioResult(BaseModel):
+    """Result bundle for automated evaluation scenarios."""
+
+    scenario_name: str = Field(..., description="Unique scenario identifier")
+    feature_flags: GatewayFeatureFlags = Field(
+        ..., description="Feature configuration used when executing the scenario."
+    )
+    response: ValidationResponse = Field(
+        ..., description="Raw validation response returned by the gateway or harness."
+    )
+    passed: bool = Field(..., description="Whether the observed result matched the expectation")
+    expected_success: bool = Field(..., description="Expected success flag for the scenario")
+    expected_error_types: List[ValidationErrorType] = Field(
+        default_factory=list,
+        description="Error types that should surface when validation fails.",
+    )

@@ -9,13 +9,22 @@ import time
 import logging
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
-from rdflib import Graph, Namespace, Literal, URIRef
+from rdflib import Graph, Namespace, Literal, URIRef, BNode
 from rdflib.namespace import RDF, RDFS, OWL
 from SPARQLWrapper import SPARQLWrapper, JSON
 
 from .models import (
-    ValidationRequest, ValidationResponse, ValidationError, ValidationErrorType,
-    StagingWriteRequest, CommitRequest, QueryRequest, MetricsData, AlertData, ProvenanceData
+    ValidationRequest,
+    ValidationResponse,
+    ValidationError,
+    ValidationErrorType,
+    StagingWriteRequest,
+    CommitRequest,
+    QueryRequest,
+    MetricsData,
+    AlertData,
+    ProvenanceData,
+    GatewayFeatureFlags,
 )
 from ..ontology.tourism_ontology import TourismOntology
 from ..ontology.shacl_shapes import TourismSHACLShapes
@@ -31,7 +40,11 @@ MSG = Namespace("http://example.org/messages#")
 class ValidatorGateway:
     """Validator Gateway for multi-agent collaboration system."""
     
-    def __init__(self, fuseki_endpoint: str = None):
+    def __init__(
+        self,
+        fuseki_endpoint: str = None,
+        feature_flags: Optional[GatewayFeatureFlags] = None,
+    ):
         """
         Initialize the validator gateway.
         
@@ -50,6 +63,9 @@ class ValidatorGateway:
         self.ontology = TourismOntology(self.fuseki_client)
         self.shacl_shapes = TourismSHACLShapes(self.fuseki_client)
         self.reasoning_engine = TourismReasoningEngine(self.fuseki_client)
+
+        # Feature flag configuration controlling validation layers
+        self.feature_flags = feature_flags or GatewayFeatureFlags()
         
         # Load ontology and shapes into Fuseki (required)
         if not self._load_ontology_to_fuseki():
@@ -216,112 +232,147 @@ class ValidatorGateway:
                 session_id=request.session_id
             )
             
-            # Run agent-level consistency validation
-            agent_consistency_result = self._validate_agent_consistency(
-                agent_id=request.agent_id,
-                staging_graph=staging_graph,
-                merged_graph=merged_graph
-            )
-            
-            if not agent_consistency_result["is_consistent"]:
-                errors = []
-                for issue in agent_consistency_result["consistency_issues"]:
-                    errors.append(ValidationError(
-                        error_type=ValidationErrorType.LOGIC_CONTRADICTION,
-                        message=f"Agent {request.agent_id} consistency violation: {issue.get('message', 'Consistency violation')}",
-                        focus_node=issue.get("entity"),
-                        details=issue
-                    ))
-                
-                self._update_metrics(success=False, error_type="AGENT_CONSISTENCY_VIOLATION")
-                return ValidationResponse(
-                    success=False,
-                    message=f"Agent {request.agent_id} consistency validation failed",
-                    errors=errors,
-                    agent_id=request.agent_id
+            if self.feature_flags.enable_agent_consistency:
+                agent_consistency_result = self._validate_agent_consistency(
+                    agent_id=request.agent_id,
+                    staging_graph=staging_graph,
+                    merged_graph=merged_graph
                 )
-            
-            # Run SHACL validation
-            shacl_result = self.shacl_shapes.get_validation_report(merged_graph)
-            
-            if not shacl_result["conforms"]:
-                errors = []
-                for violation in shacl_result["violations"]:
-                    errors.append(ValidationError(
-                        error_type=ValidationErrorType.SHACL_VIOLATION,
-                        message=f"Agent {request.agent_id} SHACL violation: {violation.get('message', 'SHACL validation failed')}",
-                        focus_node=violation.get("focus_node"),
-                        property_path=violation.get("path"),
-                        severity=violation.get("severity", "error"),
-                        details=violation
-                    ))
-                
-                self._update_metrics(success=False, error_type="SHACL_VIOLATION")
-                return ValidationResponse(
-                    success=False,
-                    message=f"Agent {request.agent_id} SHACL validation failed",
-                    errors=errors,
-                    agent_id=request.agent_id
+
+                if not agent_consistency_result["is_consistent"]:
+                    errors = []
+                    for issue in agent_consistency_result["consistency_issues"]:
+                        errors.append(ValidationError(
+                            error_type=ValidationErrorType.LOGIC_CONTRADICTION,
+                            message=f"Agent {request.agent_id} consistency violation: {issue.get('message', 'Consistency violation')}",
+                            focus_node=issue.get("entity"),
+                            details=issue
+                        ))
+
+                    self._update_metrics(success=False, error_type="AGENT_CONSISTENCY_VIOLATION")
+                    return ValidationResponse(
+                        success=False,
+                        message=f"Agent {request.agent_id} consistency validation failed",
+                        errors=errors,
+                        agent_id=request.agent_id
+                    )
+            else:
+                logger.debug(
+                    "Skipping agent-level consistency validation for %s due to feature flag",
+                    request.agent_id
                 )
-            
-            # Run forward-chaining reasoning
-            reasoning_result = self.reasoning_engine.run_reasoning(merged_graph)
-            
-            # Check for contradictions
-            if reasoning_result["contradictions"]:
-                errors = []
-                for contradiction in reasoning_result["contradictions"]:
-                    errors.append(ValidationError(
-                        error_type=ValidationErrorType.LOGIC_CONTRADICTION,
-                        message=f"Agent {request.agent_id} contradiction: {contradiction.get('message', 'Logic contradiction detected')}",
-                        focus_node=contradiction.get("entity"),
-                        details=contradiction
-                    ))
-                
-                self._update_metrics(success=False, error_type="LOGIC_CONTRADICTION")
-                return ValidationResponse(
-                    success=False,
-                    message=f"Agent {request.agent_id} logic contradiction detected",
-                    errors=errors,
-                    contradictions=reasoning_result["contradictions"],
-                    agent_id=request.agent_id
+
+            if self.feature_flags.enable_shacl:
+                shacl_result = self.shacl_shapes.get_validation_report(merged_graph)
+
+                if not shacl_result["conforms"]:
+                    errors = []
+                    for violation in shacl_result["violations"]:
+                        errors.append(ValidationError(
+                            error_type=ValidationErrorType.SHACL_VIOLATION,
+                            message=f"Agent {request.agent_id} SHACL violation: {violation.get('message', 'SHACL validation failed')}",
+                            focus_node=violation.get("focus_node"),
+                            property_path=violation.get("path"),
+                            severity=violation.get("severity", "error"),
+                            details=violation
+                        ))
+
+                    self._update_metrics(success=False, error_type="SHACL_VIOLATION")
+                    return ValidationResponse(
+                        success=False,
+                        message=f"Agent {request.agent_id} SHACL validation failed",
+                        errors=errors,
+                        agent_id=request.agent_id
+                    )
+            else:
+                logger.debug(
+                    "Skipping SHACL validation for %s due to feature flag",
+                    request.agent_id
                 )
-            
-            # Validate consistency
-            consistency_result = self.reasoning_engine.validate_consistency(merged_graph)
-            
-            if not consistency_result["is_consistent"]:
-                errors = []
-                for issue in consistency_result["consistency_issues"]:
-                    errors.append(ValidationError(
-                        error_type=ValidationErrorType.LOGIC_CONTRADICTION,
-                        message=f"Agent {request.agent_id} consistency violation: {issue.get('message', 'Consistency violation')}",
-                        focus_node=issue.get("entity"),
-                        details=issue
-                    ))
-                
-                self._update_metrics(success=False, error_type="LOGIC_CONTRADICTION")
-                return ValidationResponse(
-                    success=False,
-                    message=f"Agent {request.agent_id} consistency validation failed",
-                    errors=errors,
-                    agent_id=request.agent_id
+
+            reasoning_result = {"derived_facts": [], "contradictions": [], "iterations": 0}
+            consistency_result = {"is_consistent": True, "consistency_issues": []}
+
+            if self.feature_flags.enable_reasoning:
+                reasoning_result = self.reasoning_engine.run_reasoning(merged_graph)
+
+                if reasoning_result["contradictions"]:
+                    errors = []
+                    for contradiction in reasoning_result["contradictions"]:
+                        errors.append(ValidationError(
+                            error_type=ValidationErrorType.LOGIC_CONTRADICTION,
+                            message=f"Agent {request.agent_id} contradiction: {contradiction.get('message', 'Logic contradiction detected')}",
+                            focus_node=contradiction.get("entity"),
+                            details=contradiction
+                        ))
+
+                    self._update_metrics(
+                        success=False,
+                        error_type="LOGIC_CONTRADICTION",
+                        reasoning_iterations=reasoning_result.get("iterations", 0),
+                        derived_facts_count=len(reasoning_result.get("derived_facts", [])),
+                    )
+                    return ValidationResponse(
+                        success=False,
+                        message=f"Agent {request.agent_id} logic contradiction detected",
+                        errors=errors,
+                        contradictions=reasoning_result["contradictions"],
+                        agent_id=request.agent_id
+                    )
+
+                consistency_result = self.reasoning_engine.validate_consistency(merged_graph)
+
+                if not consistency_result["is_consistent"]:
+                    errors = []
+                    for issue in consistency_result["consistency_issues"]:
+                        errors.append(ValidationError(
+                            error_type=ValidationErrorType.LOGIC_CONTRADICTION,
+                            message=f"Agent {request.agent_id} consistency violation: {issue.get('message', 'Consistency violation')}",
+                            focus_node=issue.get("entity"),
+                            details=issue
+                        ))
+
+                    self._update_metrics(
+                        success=False,
+                        error_type="LOGIC_CONTRADICTION",
+                        reasoning_iterations=reasoning_result.get("iterations", 0),
+                        derived_facts_count=len(reasoning_result.get("derived_facts", [])),
+                    )
+                    return ValidationResponse(
+                        success=False,
+                        message=f"Agent {request.agent_id} consistency validation failed",
+                        errors=errors,
+                        agent_id=request.agent_id
+                    )
+            else:
+                logger.debug(
+                    "Skipping reasoning and consistency checks for %s due to feature flag",
+                    request.agent_id
                 )
             
             # Success - prepare response
             processing_time = (time.time() - start_time) * 1000
             
             # Track provenance
-            self._track_provenance(request, reasoning_result["derived_facts"])
+            self._track_provenance(
+                request, reasoning_result.get("derived_facts", [])
+            )
             
             # Update metrics
-            self._update_metrics(success=True, processing_time=processing_time)
+            self._update_metrics(
+                success=True,
+                processing_time=processing_time,
+                reasoning_iterations=reasoning_result.get("iterations", 0),
+                derived_facts_count=len(reasoning_result.get("derived_facts", [])),
+            )
             
             return ValidationResponse(
                 success=True,
                 message=f"Agent {request.agent_id} validation successful",
-                derived_facts=self._format_derived_facts(reasoning_result["derived_facts"]),
-                reasoning_iterations=reasoning_result["iterations"],
+                derived_facts=self._format_derived_facts(
+                    reasoning_result.get("derived_facts", [])
+                ),
+                reasoning_iterations=reasoning_result.get("iterations", 0),
                 processing_time_ms=processing_time,
                 agent_id=request.agent_id
             )
@@ -382,29 +433,35 @@ class ValidatorGateway:
             consensus_graph_uri = f"http://example.org/consensus/{request.session_id}"
             self._commit_to_consensus(staging_data, consensus_graph_uri)
             
-            # CRITICAL: Check consensus/main graph consistency before final commit
-            consensus_consistency_result = self._validate_consensus_main_consistency(
-                session_id=request.session_id,
-                consensus_graph_uri=consensus_graph_uri
-            )
-            
-            if not consensus_consistency_result["is_consistent"]:
-                # Rollback consensus commit if consistency check fails
-                self._rollback_consensus_commit(consensus_graph_uri)
-                
-                errors = []
-                for issue in consensus_consistency_result["consistency_issues"]:
-                    errors.append(ValidationError(
-                        error_type=ValidationErrorType.LOGIC_CONTRADICTION,
-                        message=f"Consensus/Main consistency violation: {issue.get('message', 'Consistency violation')}",
-                        focus_node=issue.get("entity"),
-                        details=issue
-                    ))
-                
-                return ValidationResponse(
-                    success=False,
-                    message="Consensus/Main graph consistency validation failed",
-                    errors=errors
+            if self.feature_flags.enable_consensus_checks:
+                # CRITICAL: Check consensus/main graph consistency before final commit
+                consensus_consistency_result = self._validate_consensus_main_consistency(
+                    session_id=request.session_id,
+                    consensus_graph_uri=consensus_graph_uri
+                )
+
+                if not consensus_consistency_result["is_consistent"]:
+                    # Rollback consensus commit if consistency check fails
+                    self._rollback_consensus_commit(consensus_graph_uri)
+
+                    errors = []
+                    for issue in consensus_consistency_result["consistency_issues"]:
+                        errors.append(ValidationError(
+                            error_type=ValidationErrorType.LOGIC_CONTRADICTION,
+                            message=f"Consensus/Main consistency violation: {issue.get('message', 'Consistency violation')}",
+                            focus_node=issue.get("entity"),
+                            details=issue
+                        ))
+
+                    return ValidationResponse(
+                        success=False,
+                        message="Consensus/Main graph consistency validation failed",
+                        errors=errors
+                    )
+            else:
+                logger.debug(
+                    "Skipping consensus/main consistency validation for session %s due to feature flag",
+                    request.session_id
                 )
             
             # Clear staging only after successful consistency check
@@ -862,9 +919,55 @@ class ValidatorGateway:
     
     def _create_message_notification(self, request: CommitRequest, derived_facts: List[Dict]):
         """Create message notification for other agents."""
-        # Create message in message graph
-        pass
-    
+        try:
+            message_graph = Graph()
+            message_graph.bind("msg", MSG)
+            message_graph.bind("tourism", TOURISM)
+
+            message_id = MSG[
+                f"message_{request.agent_id}_{int(time.time() * 1000)}"
+            ]
+
+            message_graph.add((message_id, RDF.type, MSG.CommitNotification))
+            message_graph.add((message_id, MSG.fromAgent, Literal(request.agent_id)))
+            message_graph.add((message_id, MSG.session, Literal(request.session_id)))
+            message_graph.add((message_id, MSG.timestamp, Literal(datetime.utcnow().isoformat())))
+            message_graph.add((message_id, MSG.stagingGraph, URIRef(request.staging_graph)))
+
+            def _to_term(value: str):
+                if value is None:
+                    return None
+                if isinstance(value, str) and value.startswith(("http://", "https://")):
+                    return URIRef(value)
+                return Literal(value)
+
+            for fact in derived_facts or []:
+                fact_node = BNode()
+                message_graph.add((message_id, MSG.includesFact, fact_node))
+
+                subject_term = _to_term(fact.get("subject"))
+                if subject_term is not None:
+                    message_graph.add((fact_node, MSG.factSubject, subject_term))
+
+                predicate_term = _to_term(fact.get("predicate"))
+                if predicate_term is not None:
+                    message_graph.add((fact_node, MSG.factPredicate, predicate_term))
+
+                object_term = _to_term(fact.get("object"))
+                if object_term is not None:
+                    message_graph.add((fact_node, MSG.factObject, object_term))
+
+            self.fuseki_client.add_data_to_graph(
+                message_graph, self.fuseki_client.messages_graph
+            )
+            logger.info(
+                "📨 Created commit notification for agent %s in session %s",
+                request.agent_id,
+                request.session_id,
+            )
+        except Exception as exc:
+            logger.error("❌ Failed to create message notification: %s", exc)
+
     def _track_provenance(self, request: ValidationRequest, derived_facts: List[Tuple]):
         """Track provenance of derived facts."""
         for fact in derived_facts:
@@ -888,24 +991,38 @@ class ValidatorGateway:
             })
         return formatted
     
-    def _update_metrics(self, success: bool, error_type: str = None, processing_time: float = 0):
+    def _update_metrics(
+        self,
+        success: bool,
+        error_type: str = None,
+        processing_time: float = 0,
+        reasoning_iterations: int = 0,
+        derived_facts_count: int = 0,
+        agent_id: Optional[str] = None,
+    ):
         """Update metrics data."""
         self.metrics.total_requests += 1
-        
+
         if success:
             self.metrics.successful_validations += 1
         else:
             self.metrics.failed_validations += 1
-            
+
             if error_type == "SHACL_VIOLATION":
                 self.metrics.shacl_violations += 1
             elif error_type == "LOGIC_CONTRADICTION":
                 self.metrics.logic_contradictions += 1
-        
+
         if processing_time > 0:
             # Update average processing time
             total_time = self.metrics.average_processing_time_ms * (self.metrics.total_requests - 1)
             self.metrics.average_processing_time_ms = (total_time + processing_time) / self.metrics.total_requests
+
+        if reasoning_iterations:
+            self.metrics.reasoning_iterations_total += reasoning_iterations
+
+        if derived_facts_count:
+            self.metrics.derived_facts_total += derived_facts_count
     
     def get_metrics(self) -> MetricsData:
         """Get current metrics."""
