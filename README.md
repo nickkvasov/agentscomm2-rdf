@@ -137,6 +137,32 @@ This POC demonstrates how to build **intelligent, collaborative AI systems** tha
 - **Learn and reason** about their domain
 - **Scale** to handle complex, real-world scenarios
 
+## 📝 **Research Readiness for arXiv Submission**
+
+To transition this proof-of-concept into an arXiv-quality paper, the repository now anchors the following research narrative:
+
+### **Formal Research Claims**
+- **Facts-only coordination improves reliability.** Enforcing RDF-based messaging guided by the ontology reduces malformed contributions compared to free-form chat protocols implemented by other agent systems.
+- **Layered validation prevents error propagation.** Sequential SHACL checks, SWRL reasoning, and consensus graph review (see [`src/gateway`](src/gateway)) bound both false positives and false negatives before facts reach the main graph.
+- **Hybrid symbolic–statistical workflows enhance coverage.** LangGraph agents (`src/langgraph_workflows`) leverage ontology retrieval to expand candidate facts without sacrificing structural guarantees.
+- **Semantic rules provide explainable remediation.** SWRL outputs underpin human-readable contradiction reports, increasing user trust when resolving conflicts.
+
+### **Evaluation Snapshot**
+- **Datasets.** Combine synthetic tourism graphs derived from `ontology/` templates with real-world sources (e.g., Wikivoyage) to probe generalization.
+- **Metrics.** Track per-layer validation precision/recall, consensus convergence speed, LangGraph contribution deltas, and qualitative explainability ratings.
+- **Protocols.** Execute controlled fault injection, concurrent agent stress tests via `scripts/agent_runner.py`, LangGraph enable/disable comparisons, and expert review of contradiction explanations.
+- **Automated harness.** Run `scripts/run_evaluation.py` to replay synthetic scenarios across feature toggles and export markdown/JSON scorecards for ablation tracking.
+- **Ablations.** Toggle SHACL, SWRL, consensus, and ontology-informed prompts to isolate each safeguard's contribution.
+
+### **Robustness, Scalability, and Reproducibility**
+- Profile `GatewayValidator` runtime and the HTTP gateway load characteristics, documenting caching and batching strategies for scaling.
+- Detail resilience measures for Fuseki outages and highlight how staging graph audits surface contradictory inputs before persistence.
+- Package reproducibility assets: Docker/Fuseki orchestration, `.env` templates, scripted demos via `unified_demo.py`, and validation log capture guidelines.
+
+### **Next Steps & Documentation**
+- Draft the manuscript introduction and methodology around the claims listed above, supported by pipeline diagrams and contradiction case studies.
+- Consult the new [ArXiv Paper Preparation Guide](docs/arxiv-paper-prep.md) for a full checklist covering evaluation design, comparative analyses, and reproducibility artifacts.
+
 ### **🏭 Production-Grade Decision Making: Why This Approach Matters**
 
 #### **🚨 The Challenge of Production Decision Systems**
